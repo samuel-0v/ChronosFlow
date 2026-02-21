@@ -10,6 +10,7 @@ import {
   Inbox,
   Loader2,
   Plus,
+  Timer,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -24,12 +25,27 @@ import type { Task, Category, TaskStatus } from '@/types'
 
 type TaskWithCategory = Task & { categories: Pick<Category, 'name' | 'type'> | null }
 
+// ----- Durações de Pomodoro pré-definidas (segundos) -----
+
+const POMODORO_DURATIONS = [
+  { label: '15 min', value: 15 * 60 },
+  { label: '25 min', value: 25 * 60 },
+  { label: '30 min', value: 30 * 60 },
+  { label: '45 min', value: 45 * 60 },
+  { label: '50 min', value: 50 * 60 },
+]
+
 // ----- Componentes internos -----
 
 function TimerCard() {
   const { user } = useAuth()
   const {
     elapsedTime,
+    remainingTime,
+    mode,
+    setMode,
+    pomodoroDuration,
+    setPomodoroDuration,
     status,
     isRunning,
     isPaused,
@@ -60,7 +76,6 @@ function TimerCard() {
           console.error('[Dashboard] Erro ao buscar stats:', error.message)
           return
         }
-        // Corrige tipagem: data pode ser any[]
         const entries = (data ?? []) as Array<{ session_type: 'WORK' | 'STUDY'; total_duration: number | null }>
         let work = 0
         let study = 0
@@ -71,11 +86,12 @@ function TimerCard() {
         setWorkToday(work)
         setStudyToday(study)
       })
-  }, [user, status]) // Refetch ao mudar status (idle = sessão encerrada)
+  }, [user, status])
 
   const handlePlayPause = async () => {
     if (status === 'idle') {
-      await startTimer('WORK')
+      const sessionType = mode === 'pomodoro' ? 'STUDY' : 'WORK'
+      await startTimer(sessionType)
     } else if (isRunning) {
       const reason = window.prompt('Motivo da pausa (opcional):')
       await pauseTimer(reason ?? undefined)
@@ -90,43 +106,123 @@ function TimerCard() {
     }
   }
 
+  const displayTime = mode === 'pomodoro' ? remainingTime : elapsedTime
+  const isIdle = status === 'idle'
+
+  // Progresso do pomodoro (0-100)
+  const pomodoroProgress =
+    mode === 'pomodoro' && pomodoroDuration > 0
+      ? Math.min(100, (elapsedTime / pomodoroDuration) * 100)
+      : 0
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 lg:p-8">
       {/* Header */}
-      <div className="mb-6 flex items-center gap-2 text-slate-400">
+      <div className="mb-4 flex items-center gap-2 text-slate-400">
         <Clock className="h-4 w-4" />
         <span className="text-xs font-semibold tracking-widest uppercase">Foco Atual</span>
       </div>
+
+      {/* Mode selector tabs */}
+      <div className="mb-6 flex items-center justify-center">
+        <div className="inline-flex rounded-lg border border-slate-800 bg-slate-950 p-1">
+          <button
+            onClick={() => setMode('free')}
+            disabled={!isIdle}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              mode === 'free'
+                ? 'bg-primary-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            } disabled:cursor-not-allowed`}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            Cronômetro
+          </button>
+          <button
+            onClick={() => setMode('pomodoro')}
+            disabled={!isIdle}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              mode === 'pomodoro'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            } disabled:cursor-not-allowed`}
+          >
+            <Timer className="h-3.5 w-3.5" />
+            Pomodoro
+          </button>
+        </div>
+      </div>
+
+      {/* Pomodoro duration picker (only when idle + pomodoro) */}
+      {mode === 'pomodoro' && isIdle && (
+        <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
+          {POMODORO_DURATIONS.map((d) => (
+            <button
+              key={d.value}
+              onClick={() => setPomodoroDuration(d.value)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                pomodoroDuration === d.value
+                  ? 'bg-rose-600/20 text-rose-400 ring-1 ring-rose-500/40'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Status badge */}
       <div className="mb-2 text-center">
         <span
           className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
             isRunning
-              ? 'bg-emerald-500/15 text-emerald-400'
+              ? mode === 'pomodoro'
+                ? 'bg-rose-500/15 text-rose-400'
+                : 'bg-emerald-500/15 text-emerald-400'
               : isPaused
                 ? 'bg-amber-500/15 text-amber-400'
                 : 'bg-slate-800 text-slate-500'
           }`}
         >
-          {isRunning ? 'Em andamento — Trabalho' : isPaused ? 'Pausado' : 'Parado'}
+          {isRunning
+            ? mode === 'pomodoro'
+              ? 'Pomodoro em andamento'
+              : 'Em andamento — Trabalho'
+            : isPaused
+              ? 'Pausado'
+              : 'Parado'}
         </span>
       </div>
 
-      {/* Timer */}
+      {/* Timer display */}
       <p
         className={`text-center font-mono text-7xl font-bold tracking-tight lg:text-8xl ${
-          isPaused ? 'animate-pulse text-amber-300' : 'text-slate-100'
+          isPaused
+            ? 'animate-pulse text-amber-300'
+            : mode === 'pomodoro' && isRunning
+              ? 'text-rose-100'
+              : 'text-slate-100'
         }`}
       >
-        {formatTime(elapsedTime)}
+        {formatTime(displayTime)}
       </p>
+
+      {/* Pomodoro progress bar */}
+      {mode === 'pomodoro' && !isIdle && (
+        <div className="mx-auto mt-3 h-1.5 max-w-xs overflow-hidden rounded-full bg-slate-800">
+          <div
+            className="h-full rounded-full bg-rose-500 transition-all duration-1000"
+            style={{ width: `${pomodoroProgress}%` }}
+          />
+        </div>
+      )}
 
       {/* Controles */}
       <div className="mt-8 flex items-center justify-center gap-4">
         <button
           onClick={handleStop}
-          disabled={status === 'idle'}
+          disabled={isIdle}
           className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 text-slate-400 transition-colors hover:border-red-500/50 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
           title="Parar"
         >
@@ -138,7 +234,9 @@ function TimerCard() {
           className={`flex h-16 w-16 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 ${
             isPaused
               ? 'bg-amber-500 shadow-amber-500/25'
-              : 'bg-primary-600 shadow-primary-600/25'
+              : mode === 'pomodoro'
+                ? 'bg-rose-600 shadow-rose-600/25'
+                : 'bg-primary-600 shadow-primary-600/25'
           }`}
           title={isRunning ? 'Pausar' : isPaused ? 'Retomar' : 'Iniciar'}
         >

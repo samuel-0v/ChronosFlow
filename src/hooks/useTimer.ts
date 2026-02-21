@@ -5,11 +5,23 @@ import type { SessionType } from '@/types'
 
 // ----- Tipos -----
 
+export type TimerMode = 'free' | 'pomodoro'
 type TimerStatus = 'idle' | 'running' | 'paused'
+
+/** Duração padrão do pomodoro: 25 min */
+export const DEFAULT_POMODORO_SECONDS = 25 * 60
 
 interface UseTimerReturn {
   /** Segundos decorridos */
   elapsedTime: number
+  /** Tempo restante (pomodoro) — 0 no modo livre */
+  remainingTime: number
+  /** Modo atual */
+  mode: TimerMode
+  setMode: (m: TimerMode) => void
+  /** Duração do pomodoro em segundos */
+  pomodoroDuration: number
+  setPomodoroDuration: (s: number) => void
   /** Status legível */
   status: TimerStatus
   isRunning: boolean
@@ -34,6 +46,8 @@ export function useTimer(): UseTimerReturn {
   const [elapsedTime, setElapsedTime] = useState(0)
   const [status, setStatus] = useState<TimerStatus>('idle')
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null)
+  const [mode, setMode] = useState<TimerMode>('free')
+  const [pomodoroDuration, setPomodoroDuration] = useState(DEFAULT_POMODORO_SECONDS)
 
   // Referências para o intervalo e para calcular pausas
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -43,8 +57,22 @@ export function useTimer(): UseTimerReturn {
   const sessionStartRef = useRef<Date | null>(null)
   // Evita restaurar duas vezes
   const restoredRef = useRef(false)
+  // Ref para o modo/duração correntes (evita stale closures no interval)
+  const modeRef = useRef<TimerMode>(mode)
+  const pomoDurationRef = useRef(pomodoroDuration)
+
+  // Manter refs sincronizadas
+  useEffect(() => { modeRef.current = mode }, [mode])
+  useEffect(() => { pomoDurationRef.current = pomodoroDuration }, [pomodoroDuration])
+
+  // Remaining time calculado
+  const remainingTime =
+    mode === 'pomodoro' ? Math.max(0, pomodoroDuration - elapsedTime) : 0
 
   // ----- Tick do cronômetro -----
+
+  // Ref para chamar stopTimer de dentro do interval sem stale closure
+  const stopTimerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   const startTicking = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current)
@@ -53,7 +81,16 @@ export function useTimer(): UseTimerReturn {
       if (!sessionStartRef.current) return
       const now = Date.now()
       const totalElapsed = Math.floor((now - sessionStartRef.current.getTime()) / 1000)
-      setElapsedTime(Math.max(0, totalElapsed - pausedSecondsRef.current))
+      const effective = Math.max(0, totalElapsed - pausedSecondsRef.current)
+
+      // Pomodoro auto-stop
+      if (modeRef.current === 'pomodoro' && effective >= pomoDurationRef.current) {
+        setElapsedTime(pomoDurationRef.current)
+        stopTimerRef.current()
+        return
+      }
+
+      setElapsedTime(effective)
     }, 1000)
   }, [])
 
@@ -270,8 +307,21 @@ export function useTimer(): UseTimerReturn {
     setStatus('idle')
   }, [activeEntryId, elapsedTime, stopTicking])
 
+  // Manter ref sincronizada para o auto-stop do pomodoro
+  useEffect(() => { stopTimerRef.current = stopTimer }, [stopTimer])
+
   return {
     elapsedTime,
+    remainingTime,
+    mode,
+    setMode: (m: TimerMode) => {
+      // Só permite trocar modo quando idle
+      if (status === 'idle') setMode(m)
+    },
+    pomodoroDuration,
+    setPomodoroDuration: (s: number) => {
+      if (status === 'idle') setPomodoroDuration(s)
+    },
     status,
     isRunning: status === 'running',
     isPaused: status === 'paused',
