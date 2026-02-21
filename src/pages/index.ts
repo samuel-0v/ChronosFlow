@@ -1,3 +1,4 @@
+export { Auth } from './Auth'
 export { Dashboard } from './Dashboard'
 export { Work } from './Work'
 export { Study } from './Study'
