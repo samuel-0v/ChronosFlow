@@ -1,44 +1,95 @@
-import { Play, Pause, RotateCcw, CheckCircle2, Circle, Clock, ListTodo } from 'lucide-react'
-import { PRIORITY_COLORS, PRIORITY_LABELS } from '@/lib/constants'
-import type { TaskPriority } from '@/types'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  Play,
+  Pause,
+  Square,
+  CheckCircle2,
+  Circle,
+  Clock,
+  ListTodo,
+  Inbox,
+  Loader2,
+  Plus,
+} from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+import { useTimer } from '@/hooks/useTimer'
+import { formatTime, formatDuration } from '@/lib/formatTime'
+import { PRIORITY_COLORS, PRIORITY_LABELS, CATEGORY_TYPE_LABELS } from '@/lib/constants'
+import { Modal } from '@/components/ui'
+import { TaskForm } from '@/components/tasks'
+import type { Task, Category } from '@/types'
 
-// ----- Dados mockados -----
+// ----- Tipo auxiliar para task + categoria -----
 
-interface MockTask {
-  id: string
-  title: string
-  category: string
-  priority: TaskPriority
-  done: boolean
-}
-
-const mockTasks: MockTask[] = [
-  {
-    id: '1',
-    title: 'Revisar PR do módulo de autenticação',
-    category: 'Trabalho',
-    priority: 1,
-    done: false,
-  },
-  {
-    id: '2',
-    title: 'Estudar capítulo 5 — Estruturas de Dados',
-    category: 'Faculdade',
-    priority: 2,
-    done: false,
-  },
-  {
-    id: '3',
-    title: 'Configurar CI/CD do ChronosFlow',
-    category: 'Trabalho',
-    priority: 3,
-    done: true,
-  },
-]
+type TaskWithCategory = Task & { categories: Pick<Category, 'name' | 'type'> | null }
 
 // ----- Componentes internos -----
 
 function TimerCard() {
+  const { user } = useAuth()
+  const {
+    elapsedTime,
+    status,
+    isRunning,
+    isPaused,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
+    stopTimer,
+  } = useTimer()
+
+  // Stats do dia
+  const [workToday, setWorkToday] = useState(0)
+  const [studyToday, setStudyToday] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    supabase
+      .from('time_entries')
+      .select('session_type, total_duration')
+      .eq('user_id', user.id)
+      .gte('start_time', today.toISOString())
+      .not('total_duration', 'is', null)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[Dashboard] Erro ao buscar stats:', error.message)
+          return
+        }
+        // Corrige tipagem: data pode ser any[]
+        const entries = (data ?? []) as Array<{ session_type: 'WORK' | 'STUDY'; total_duration: number | null }>
+        let work = 0
+        let study = 0
+        for (const entry of entries) {
+          if (entry.session_type === 'WORK') work += entry.total_duration ?? 0
+          else if (entry.session_type === 'STUDY') study += entry.total_duration ?? 0
+        }
+        setWorkToday(work)
+        setStudyToday(study)
+      })
+  }, [user, status]) // Refetch ao mudar status (idle = sessão encerrada)
+
+  const handlePlayPause = async () => {
+    if (status === 'idle') {
+      await startTimer('WORK')
+    } else if (isRunning) {
+      const reason = window.prompt('Motivo da pausa (opcional):')
+      await pauseTimer(reason ?? undefined)
+    } else if (isPaused) {
+      await resumeTimer()
+    }
+  }
+
+  const handleStop = async () => {
+    if (status !== 'idle') {
+      await stopTimer()
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 lg:p-8">
       {/* Header */}
@@ -47,50 +98,69 @@ function TimerCard() {
         <span className="text-xs font-semibold tracking-widest uppercase">Foco Atual</span>
       </div>
 
-      {/* Categoria ativa (mock) */}
+      {/* Status badge */}
       <div className="mb-2 text-center">
-        <span className="inline-block rounded-full bg-primary-600/15 px-3 py-1 text-xs font-medium text-primary-400">
-          Trabalho — Sprint Review
+        <span
+          className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
+            isRunning
+              ? 'bg-emerald-500/15 text-emerald-400'
+              : isPaused
+                ? 'bg-amber-500/15 text-amber-400'
+                : 'bg-slate-800 text-slate-500'
+          }`}
+        >
+          {isRunning ? 'Em andamento — Trabalho' : isPaused ? 'Pausado' : 'Parado'}
         </span>
       </div>
 
       {/* Timer */}
-      <p className="text-center font-mono text-7xl font-bold tracking-tight text-slate-100 lg:text-8xl">
-        00:00:00
+      <p
+        className={`text-center font-mono text-7xl font-bold tracking-tight lg:text-8xl ${
+          isPaused ? 'animate-pulse text-amber-300' : 'text-slate-100'
+        }`}
+      >
+        {formatTime(elapsedTime)}
       </p>
 
       {/* Controles */}
       <div className="mt-8 flex items-center justify-center gap-4">
         <button
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
-          title="Reiniciar"
+          onClick={handleStop}
+          disabled={status === 'idle'}
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 text-slate-400 transition-colors hover:border-red-500/50 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
+          title="Parar"
         >
-          <RotateCcw className="h-4 w-4" />
+          <Square className="h-4 w-4" />
         </button>
 
         <button
-          className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg shadow-primary-600/25 transition-transform hover:scale-105 active:scale-95"
-          title="Iniciar"
+          onClick={handlePlayPause}
+          className={`flex h-16 w-16 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 ${
+            isPaused
+              ? 'bg-amber-500 shadow-amber-500/25'
+              : 'bg-primary-600 shadow-primary-600/25'
+          }`}
+          title={isRunning ? 'Pausar' : isPaused ? 'Retomar' : 'Iniciar'}
         >
-          <Play className="h-6 w-6 ml-0.5" />
+          {isRunning ? (
+            <Pause className="h-6 w-6" />
+          ) : (
+            <Play className="h-6 w-6 ml-0.5" />
+          )}
         </button>
 
-        <button
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
-          title="Pausar"
-        >
-          <Pause className="h-4 w-4" />
-        </button>
+        {/* Espaço reservado para manter simetria */}
+        <div className="h-10 w-10" />
       </div>
 
       {/* Stats rápidos */}
       <div className="mt-8 grid grid-cols-2 gap-4 border-t border-slate-800 pt-6">
         <div className="text-center">
-          <p className="text-2xl font-bold text-slate-100">3h 20m</p>
+          <p className="text-2xl font-bold text-slate-100">{formatDuration(workToday)}</p>
           <p className="mt-0.5 text-xs text-slate-500">Trabalhado hoje</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-slate-100">1h 45m</p>
+          <p className="text-2xl font-bold text-slate-100">{formatDuration(studyToday)}</p>
           <p className="mt-0.5 text-xs text-slate-500">Estudado hoje</p>
         </div>
       </div>
@@ -98,30 +168,56 @@ function TimerCard() {
   )
 }
 
-function TaskItem({ task }: { task: MockTask }) {
+// ----- Task Item -----
+
+function TaskItem({ task }: { task: TaskWithCategory }) {
+  const [done, setDone] = useState(task.status === 'COMPLETED')
+
+  const toggleDone = async () => {
+    const newStatus = done ? 'PENDING' : 'COMPLETED'
+    const { error } = await supabase
+      .from('tasks')
+      .update({ status: newStatus })
+      .eq('id', task.id)
+
+    if (error) {
+      console.error('[Dashboard] Erro ao atualizar task:', error.message)
+      return
+    }
+    setDone(!done)
+  }
+
+  const categoryLabel = task.categories?.name
+    ?? (task.categories?.type ? CATEGORY_TYPE_LABELS[task.categories.type] : null)
+
   return (
     <div className="group flex items-start gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-slate-800/50">
-      {/* Checkbox */}
-      <button className="mt-0.5 shrink-0 text-slate-500 transition-colors hover:text-primary-400">
-        {task.done ? (
+      <button
+        onClick={toggleDone}
+        className="mt-0.5 shrink-0 text-slate-500 transition-colors hover:text-primary-400"
+      >
+        {done ? (
           <CheckCircle2 className="h-5 w-5 text-emerald-500" />
         ) : (
           <Circle className="h-5 w-5" />
         )}
       </button>
 
-      {/* Conteúdo */}
       <div className="min-w-0 flex-1">
         <p
           className={`text-sm font-medium leading-snug ${
-            task.done ? 'text-slate-500 line-through' : 'text-slate-200'
+            done ? 'text-slate-500 line-through' : 'text-slate-200'
           }`}
         >
           {task.title}
         </p>
         <div className="mt-1 flex items-center gap-2">
-          <span className="text-[11px] text-slate-500">{task.category}</span>
-          <span className="text-slate-700">·</span>
+          {categoryLabel && (
+            <>
+              <span className="text-[11px] text-slate-500">{categoryLabel}</span>
+              <span className="text-slate-700">·</span>
+            </>
+          )}
           <span className={`text-[11px] font-medium ${PRIORITY_COLORS[task.priority]}`}>
             {PRIORITY_LABELS[task.priority]}
           </span>
@@ -131,56 +227,135 @@ function TaskItem({ task }: { task: MockTask }) {
   )
 }
 
+// ----- Tasks Card -----
+
 function TasksCard() {
+  const { user } = useAuth()
+  const [tasks, setTasks] = useState<TaskWithCategory[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  const fetchTasks = useCallback(() => {
+    if (!user) return
+    setIsLoading(true)
+
+    supabase
+      .from('tasks')
+      .select('*, categories(name, type)')
+      .eq('user_id', user.id)
+      .in('status', ['PENDING', 'IN_PROGRESS'])
+      .order('priority', { ascending: true })
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[Dashboard] Erro ao buscar tasks:', error.message)
+        }
+        setTasks((data as TaskWithCategory[]) ?? [])
+        setIsLoading(false)
+      })
+  }, [user])
+
+  useEffect(() => {
+    fetchTasks()
+  }, [fetchTasks])
+
+  const handleTaskCreated = () => {
+    setIsModalOpen(false)
+    fetchTasks()
+  }
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2 text-slate-400">
           <ListTodo className="h-4 w-4" />
-          <span className="text-xs font-semibold tracking-widest uppercase">Tarefas de Hoje</span>
+          <span className="text-xs font-semibold tracking-widest uppercase">Tarefas Pendentes</span>
         </div>
-        <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-400">
-          {mockTasks.filter((t) => !t.done).length} pendentes
-        </span>
+        <div className="flex items-center gap-2">
+          {!isLoading && tasks.length > 0 && (
+            <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-400">
+              {tasks.length}
+            </span>
+          )}
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-1 rounded-lg bg-primary-600/15 px-2.5 py-1 text-xs font-medium text-primary-400 transition-colors hover:bg-primary-600/25"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Nova Tarefa
+          </button>
+        </div>
       </div>
 
-      {/* Lista */}
-      <div className="divide-y divide-slate-800/50">
-        {mockTasks.map((task) => (
-          <TaskItem key={task.id} task={task} />
-        ))}
-      </div>
+      {/* Modal de criação */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nova Tarefa">
+        <TaskForm onSuccess={handleTaskCreated} onCancel={() => setIsModalOpen(false)} />
+      </Modal>
 
-      {/* CTA */}
-      <button className="mt-4 w-full rounded-lg border border-dashed border-slate-700 py-2.5 text-xs font-medium text-slate-500 transition-colors hover:border-slate-600 hover:text-slate-400">
-        + Adicionar tarefa
-      </button>
+      {/* Conteúdo */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-10">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <Inbox className="mb-2 h-8 w-8 text-slate-700" />
+          <p className="text-sm font-medium text-slate-500">Nenhuma tarefa pendente!</p>
+          <p className="mt-0.5 text-xs text-slate-600">Crie uma tarefa para começar.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-800/50">
+          {tasks.map((task) => (
+            <TaskItem key={task.id} task={task} />
+          ))}
+        </div>
+      )}
     </div>
   )
+}
+
+// ----- Greeting helper -----
+
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Bom dia'
+  if (hour < 18) return 'Boa tarde'
+  return 'Boa noite'
+}
+
+function getFormattedDate(): string {
+  return new Date().toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
 // ----- Página -----
 
 export function Dashboard() {
+  const { user } = useAuth()
+  const displayName = user?.user_metadata?.full_name ?? 'Usuário'
+
   return (
     <div className="mx-auto max-w-6xl">
       {/* Greeting */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-100">Bom dia, Usuário 👋</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Sexta-feira, 21 de fevereiro de 2026 — Vamos focar!
+        <h1 className="text-2xl font-bold text-slate-100">
+          {getGreeting()}, {displayName} 👋
+        </h1>
+        <p className="mt-1 text-sm capitalize text-slate-500">
+          {getFormattedDate()} — Vamos focar!
         </p>
       </div>
 
       {/* Grid principal */}
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Timer — ocupa 3 colunas */}
         <div className="lg:col-span-3">
           <TimerCard />
         </div>
-
-        {/* Tarefas — ocupa 2 colunas */}
         <div className="lg:col-span-2">
           <TasksCard />
         </div>
