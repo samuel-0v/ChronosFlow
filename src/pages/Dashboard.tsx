@@ -18,7 +18,7 @@ import { formatTime, formatDuration } from '@/lib/formatTime'
 import { PRIORITY_COLORS, PRIORITY_LABELS, CATEGORY_TYPE_LABELS } from '@/lib/constants'
 import { Modal } from '@/components/ui'
 import { TaskForm } from '@/components/tasks'
-import type { Task, Category } from '@/types'
+import type { Task, Category, TaskStatus } from '@/types'
 
 // ----- Tipo auxiliar para task + categoria -----
 
@@ -174,7 +174,7 @@ function TaskItem({ task }: { task: TaskWithCategory }) {
   const [done, setDone] = useState(task.status === 'COMPLETED')
 
   const toggleDone = async () => {
-    const newStatus = done ? 'PENDING' : 'COMPLETED'
+    const newStatus: TaskStatus = done ? 'PENDING' : 'COMPLETED'
     const { error } = await supabase
       .from('tasks')
       .update({ status: newStatus })

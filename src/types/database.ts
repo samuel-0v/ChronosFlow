@@ -1,8 +1,10 @@
 // ==========================================
-// ChronosFlow - Database Types
+// ChronosFlow - Database Types (Flat / Supabase-safe)
 // ==========================================
-// Tipos TypeScript gerados a partir do schema do Supabase (supabase/schema.sql).
-// Esses tipos garantem type-safety em todas as operações com o banco de dados.
+// IMPORTANTE: Usar `type` (não `interface`) para Row/Insert/Update.
+// Em TypeScript, interfaces NÃO estendem `Record<string, unknown>`,
+// mas type aliases sim. O Supabase client exige essa compatibilidade
+// via `GenericTable`, caso contrário colapsa tudo para `never`.
 
 // ----- Enums do domínio -----
 
@@ -16,9 +18,9 @@ export type SessionType = 'WORK' | 'STUDY'
 
 export type NoteType = 'LINK' | 'BRAIN_DUMP'
 
-// ----- Row Types (representam uma linha completa da tabela) -----
+// ===================== profiles =====================
 
-export interface Profile {
+export type Profile = {
   id: string
   full_name: string | null
   avatar_url: string | null
@@ -27,7 +29,25 @@ export interface Profile {
   created_at: string
 }
 
-export interface Category {
+export type ProfileInsert = {
+  id: string
+  full_name?: string | null
+  avatar_url?: string | null
+  work_goal_hours?: number
+  study_goal_hours?: number
+  created_at?: string
+}
+
+export type ProfileUpdate = {
+  full_name?: string | null
+  avatar_url?: string | null
+  work_goal_hours?: number
+  study_goal_hours?: number
+}
+
+// ===================== categories =====================
+
+export type Category = {
   id: string
   user_id: string
   name: string
@@ -36,7 +56,24 @@ export interface Category {
   created_at: string
 }
 
-export interface Task {
+export type CategoryInsert = {
+  user_id: string
+  name: string
+  type: CategoryType
+  id?: string
+  color_hex?: string
+  created_at?: string
+}
+
+export type CategoryUpdate = {
+  name?: string
+  type?: CategoryType
+  color_hex?: string
+}
+
+// ===================== tasks =====================
+
+export type Task = {
   id: string
   user_id: string
   category_id: string | null
@@ -44,11 +81,34 @@ export interface Task {
   priority: TaskPriority
   status: TaskStatus
   due_date: string | null
-  estimated_time: number | null // minutos
+  estimated_time: number | null
   created_at: string
 }
 
-export interface TimeEntry {
+export type TaskInsert = {
+  user_id: string
+  title: string
+  id?: string
+  category_id?: string | null
+  priority?: TaskPriority
+  status?: TaskStatus
+  due_date?: string | null
+  estimated_time?: number | null
+  created_at?: string
+}
+
+export type TaskUpdate = {
+  category_id?: string | null
+  title?: string
+  priority?: TaskPriority
+  status?: TaskStatus
+  due_date?: string | null
+  estimated_time?: number | null
+}
+
+// ===================== time_entries =====================
+
+export type TimeEntry = {
   id: string
   user_id: string
   task_id: string | null
@@ -56,11 +116,34 @@ export interface TimeEntry {
   session_type: SessionType
   start_time: string
   end_time: string | null
-  total_duration: number | null // segundos
+  total_duration: number | null
   created_at: string
 }
 
-export interface Pause {
+export type TimeEntryInsert = {
+  user_id: string
+  session_type: SessionType
+  id?: string
+  task_id?: string | null
+  category_id?: string | null
+  start_time?: string
+  end_time?: string | null
+  total_duration?: number | null
+  created_at?: string
+}
+
+export type TimeEntryUpdate = {
+  task_id?: string | null
+  category_id?: string | null
+  session_type?: SessionType
+  start_time?: string
+  end_time?: string | null
+  total_duration?: number | null
+}
+
+// ===================== pauses =====================
+
+export type Pause = {
   id: string
   user_id: string
   time_entry_id: string
@@ -70,7 +153,26 @@ export interface Pause {
   created_at: string
 }
 
-export interface StudyNote {
+export type PauseInsert = {
+  user_id: string
+  time_entry_id: string
+  id?: string
+  start_time?: string
+  end_time?: string | null
+  reason?: string | null
+  created_at?: string
+}
+
+export type PauseUpdate = {
+  time_entry_id?: string
+  start_time?: string
+  end_time?: string | null
+  reason?: string | null
+}
+
+// ===================== study_notes =====================
+
+export type StudyNote = {
   id: string
   user_id: string
   category_id: string | null
@@ -80,7 +182,26 @@ export interface StudyNote {
   created_at: string
 }
 
-export interface Flashcard {
+export type StudyNoteInsert = {
+  user_id: string
+  content: string
+  note_type: NoteType
+  id?: string
+  category_id?: string | null
+  time_entry_id?: string | null
+  created_at?: string
+}
+
+export type StudyNoteUpdate = {
+  category_id?: string | null
+  time_entry_id?: string | null
+  content?: string
+  note_type?: NoteType
+}
+
+// ===================== flashcards =====================
+
+export type Flashcard = {
   id: string
   user_id: string
   category_id: string | null
@@ -92,40 +213,28 @@ export interface Flashcard {
   created_at: string
 }
 
-// ----- Insert Types (campos obrigatórios para criação) -----
+export type FlashcardInsert = {
+  user_id: string
+  front_question: string
+  back_answer: string
+  id?: string
+  category_id?: string | null
+  next_review?: string
+  interval_days?: number
+  ease_factor?: number
+  created_at?: string
+}
 
-export type ProfileInsert = Pick<Profile, 'id'> &
-  Partial<Omit<Profile, 'id' | 'created_at'>>
+export type FlashcardUpdate = {
+  category_id?: string | null
+  front_question?: string
+  back_answer?: string
+  next_review?: string
+  interval_days?: number
+  ease_factor?: number
+}
 
-export type CategoryInsert = Pick<Category, 'user_id' | 'name' | 'type'> &
-  Partial<Pick<Category, 'color_hex'>>
-
-export type TaskInsert = Pick<Task, 'user_id' | 'title'> &
-  Partial<Omit<Task, 'id' | 'user_id' | 'title' | 'created_at'>>
-
-export type TimeEntryInsert = Pick<TimeEntry, 'user_id' | 'session_type'> &
-  Partial<Omit<TimeEntry, 'id' | 'user_id' | 'session_type' | 'created_at'>>
-
-export type PauseInsert = Pick<Pause, 'user_id' | 'time_entry_id'> &
-  Partial<Omit<Pause, 'id' | 'user_id' | 'time_entry_id' | 'created_at'>>
-
-export type StudyNoteInsert = Pick<StudyNote, 'user_id' | 'content' | 'note_type'> &
-  Partial<Omit<StudyNote, 'id' | 'user_id' | 'content' | 'note_type' | 'created_at'>>
-
-export type FlashcardInsert = Pick<Flashcard, 'user_id' | 'front_question' | 'back_answer'> &
-  Partial<Omit<Flashcard, 'id' | 'user_id' | 'front_question' | 'back_answer' | 'created_at'>>
-
-// ----- Update Types (todos os campos são opcionais) -----
-
-export type ProfileUpdate = Partial<Omit<Profile, 'id' | 'created_at'>>
-export type CategoryUpdate = Partial<Omit<Category, 'id' | 'user_id' | 'created_at'>>
-export type TaskUpdate = Partial<Omit<Task, 'id' | 'user_id' | 'created_at'>>
-export type TimeEntryUpdate = Partial<Omit<TimeEntry, 'id' | 'user_id' | 'created_at'>>
-export type PauseUpdate = Partial<Omit<Pause, 'id' | 'user_id' | 'created_at'>>
-export type StudyNoteUpdate = Partial<Omit<StudyNote, 'id' | 'user_id' | 'created_at'>>
-export type FlashcardUpdate = Partial<Omit<Flashcard, 'id' | 'user_id' | 'created_at'>>
-
-// ----- Supabase Database Type (para tipagem do client) -----
+// ===================== Database (Supabase client) =====================
 
 export interface Database {
   public: {
@@ -134,36 +243,140 @@ export interface Database {
         Row: Profile
         Insert: ProfileInsert
         Update: ProfileUpdate
+        Relationships: []
       }
       categories: {
         Row: Category
         Insert: CategoryInsert
         Update: CategoryUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'categories_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
       }
       tasks: {
         Row: Task
         Insert: TaskInsert
         Update: TaskUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'tasks_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tasks_category_id_fkey'
+            columns: ['category_id']
+            isOneToOne: false
+            referencedRelation: 'categories'
+            referencedColumns: ['id']
+          },
+        ]
       }
       time_entries: {
         Row: TimeEntry
         Insert: TimeEntryInsert
         Update: TimeEntryUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'time_entries_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'time_entries_task_id_fkey'
+            columns: ['task_id']
+            isOneToOne: false
+            referencedRelation: 'tasks'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'time_entries_category_id_fkey'
+            columns: ['category_id']
+            isOneToOne: false
+            referencedRelation: 'categories'
+            referencedColumns: ['id']
+          },
+        ]
       }
       pauses: {
         Row: Pause
         Insert: PauseInsert
         Update: PauseUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'pauses_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pauses_time_entry_id_fkey'
+            columns: ['time_entry_id']
+            isOneToOne: false
+            referencedRelation: 'time_entries'
+            referencedColumns: ['id']
+          },
+        ]
       }
       study_notes: {
         Row: StudyNote
         Insert: StudyNoteInsert
         Update: StudyNoteUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'study_notes_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'study_notes_category_id_fkey'
+            columns: ['category_id']
+            isOneToOne: false
+            referencedRelation: 'categories'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'study_notes_time_entry_id_fkey'
+            columns: ['time_entry_id']
+            isOneToOne: false
+            referencedRelation: 'time_entries'
+            referencedColumns: ['id']
+          },
+        ]
       }
       flashcards: {
         Row: Flashcard
         Insert: FlashcardInsert
         Update: FlashcardUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'flashcards_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'flashcards_category_id_fkey'
+            columns: ['category_id']
+            isOneToOne: false
+            referencedRelation: 'categories'
+            referencedColumns: ['id']
+          },
+        ]
       }
     }
     Views: Record<string, never>
