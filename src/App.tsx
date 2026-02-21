@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { TimerProvider } from '@/contexts/TimerContext'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { Layout } from '@/components/layout/Layout'
 import { Auth } from '@/pages/Auth'
@@ -16,9 +17,15 @@ function App() {
           {/* Rota pública */}
           <Route path="auth" element={<Auth />} />
 
-          {/* Rotas protegidas */}
+          {/* Rotas protegidas — TimerProvider vive aqui para sobreviver à navegação */}
           <Route element={<ProtectedRoute />}>
-            <Route element={<Layout />}>
+            <Route
+              element={
+                <TimerProvider>
+                  <Layout />
+                </TimerProvider>
+              }
+            >
               <Route index element={<Dashboard />} />
               <Route path="work" element={<Work />} />
               <Route path="study" element={<Study />} />

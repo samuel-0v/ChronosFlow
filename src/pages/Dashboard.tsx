@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { useTimer } from '@/hooks/useTimer'
+import { useTimerContext } from '@/contexts/TimerContext'
 import { formatTime, formatDuration } from '@/lib/formatTime'
 import { PRIORITY_COLORS, PRIORITY_LABELS, CATEGORY_TYPE_LABELS } from '@/lib/constants'
 import { Modal } from '@/components/ui'
@@ -53,7 +53,7 @@ function TimerCard() {
     pauseTimer,
     resumeTimer,
     stopTimer,
-  } = useTimer()
+  } = useTimerContext()
 
   // Stats do dia
   const [workToday, setWorkToday] = useState(0)

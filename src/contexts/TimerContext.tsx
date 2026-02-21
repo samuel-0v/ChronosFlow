@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+// ==========================================
+// ChronosFlow - Timer Context (Global + Persistente)
+// ==========================================
+// Toda a lógica do timer vive aqui como Context para:
+// 1. Sobreviver à navegação entre páginas (SPA)
+// 2. Persistir modo pomodoro/duração no localStorage
+// 3. Restaurar estado correto ao recarregar (F5)
+
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import type { SessionType } from '@/types'
@@ -11,7 +19,15 @@ type TimerStatus = 'idle' | 'running' | 'paused'
 /** Duração padrão do pomodoro: 25 min */
 export const DEFAULT_POMODORO_SECONDS = 25 * 60
 
-interface UseTimerReturn {
+/** Chave usada no localStorage para persistir config do timer */
+const STORAGE_KEY = '@chronos:timer_config'
+
+interface TimerConfig {
+  mode: TimerMode
+  pomodoroDuration: number
+}
+
+interface TimerContextValue {
   /** Segundos decorridos */
   elapsedTime: number
   /** Tempo restante (pomodoro) — 0 no modo livre */
@@ -38,30 +54,58 @@ interface UseTimerReturn {
   stopTimer: () => Promise<void>
 }
 
-// ----- Hook -----
+const TimerContext = createContext<TimerContextValue | null>(null)
 
-export function useTimer(): UseTimerReturn {
+// ----- Helpers de localStorage -----
+
+function saveTimerConfig(config: TimerConfig): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+  } catch {
+    // localStorage indisponível — silenciar
+  }
+}
+
+function loadTimerConfig(): TimerConfig | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as TimerConfig
+  } catch {
+    return null
+  }
+}
+
+function clearTimerConfig(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // silenciar
+  }
+}
+
+// ----- Provider -----
+
+export function TimerProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
 
   const [elapsedTime, setElapsedTime] = useState(0)
   const [status, setStatus] = useState<TimerStatus>('idle')
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null)
-  const [mode, setMode] = useState<TimerMode>('free')
-  const [pomodoroDuration, setPomodoroDuration] = useState(DEFAULT_POMODORO_SECONDS)
+  const [mode, setModeState] = useState<TimerMode>('free')
+  const [pomodoroDuration, setPomodoroDurationState] = useState(DEFAULT_POMODORO_SECONDS)
 
   // Referências para o intervalo e para calcular pausas
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const activePauseIdRef = useRef<string | null>(null)
-  // Acumulador de segundos pausados na sessão atual
   const pausedSecondsRef = useRef(0)
   const sessionStartRef = useRef<Date | null>(null)
-  // Evita restaurar duas vezes
   const restoredRef = useRef(false)
-  // Ref para o modo/duração correntes (evita stale closures no interval)
+
+  // Refs para evitar stale closures no setInterval
   const modeRef = useRef<TimerMode>(mode)
   const pomoDurationRef = useRef(pomodoroDuration)
 
-  // Manter refs sincronizadas
   useEffect(() => { modeRef.current = mode }, [mode])
   useEffect(() => { pomoDurationRef.current = pomodoroDuration }, [pomodoroDuration])
 
@@ -71,7 +115,6 @@ export function useTimer(): UseTimerReturn {
 
   // ----- Tick do cronômetro -----
 
-  // Ref para chamar stopTimer de dentro do interval sem stale closure
   const stopTimerRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   const startTicking = useCallback(() => {
@@ -125,7 +168,16 @@ export function useTimer(): UseTimerReturn {
 
       if (entryErr || !entry) return
 
-      // 2. Buscar todas as pausas FECHADAS dessa sessão para calcular tempo pausado
+      // 2. Restaurar modo a partir do localStorage
+      const savedConfig = loadTimerConfig()
+      if (savedConfig) {
+        setModeState(savedConfig.mode)
+        modeRef.current = savedConfig.mode
+        setPomodoroDurationState(savedConfig.pomodoroDuration)
+        pomoDurationRef.current = savedConfig.pomodoroDuration
+      }
+
+      // 3. Buscar todas as pausas FECHADAS dessa sessão para calcular tempo pausado
       const { data: closedPauses } = await supabase
         .from('pauses')
         .select('start_time, end_time')
@@ -141,7 +193,7 @@ export function useTimer(): UseTimerReturn {
         }
       }
 
-      // 3. Verificar se existe uma pausa ABERTA (end_time IS NULL)
+      // 4. Verificar se existe uma pausa ABERTA (end_time IS NULL)
       const { data: openPause } = await supabase
         .from('pauses')
         .select('id, start_time')
@@ -150,14 +202,13 @@ export function useTimer(): UseTimerReturn {
         .limit(1)
         .maybeSingle()
 
-      // 4. Restaurar estado
+      // 5. Restaurar estado
       const sessionStart = new Date(entry.start_time)
       sessionStartRef.current = sessionStart
       pausedSecondsRef.current = totalPausedSeconds
       setActiveEntryId(entry.id)
 
       if (openPause) {
-        // Acumular tempo da pausa aberta até agora para o elapsed ficar correto
         const pauseOngoing = Math.floor(
           (Date.now() - new Date(openPause.start_time).getTime()) / 1000,
         )
@@ -165,11 +216,39 @@ export function useTimer(): UseTimerReturn {
         activePauseIdRef.current = openPause.id
 
         const totalElapsed = Math.floor((Date.now() - sessionStart.getTime()) / 1000)
-        setElapsedTime(Math.max(0, totalElapsed - pausedSecondsRef.current))
+        const effective = Math.max(0, totalElapsed - pausedSecondsRef.current)
+
+        // No modo pomodoro, limitar ao máximo da duração
+        if (savedConfig?.mode === 'pomodoro' && effective >= savedConfig.pomodoroDuration) {
+          setElapsedTime(savedConfig.pomodoroDuration)
+        } else {
+          setElapsedTime(effective)
+        }
+
         setStatus('paused')
       } else {
         const totalElapsed = Math.floor((Date.now() - sessionStart.getTime()) / 1000)
-        setElapsedTime(Math.max(0, totalElapsed - totalPausedSeconds))
+        const effective = Math.max(0, totalElapsed - totalPausedSeconds)
+
+        // No modo pomodoro, se já excedeu, auto-stop
+        if (savedConfig?.mode === 'pomodoro' && effective >= savedConfig.pomodoroDuration) {
+          setElapsedTime(savedConfig.pomodoroDuration)
+          // Finalizar sessão automaticamente
+          const now = new Date().toISOString()
+          await supabase
+            .from('time_entries')
+            .update({
+              end_time: now,
+              total_duration: savedConfig.pomodoroDuration,
+            })
+            .eq('id', entry.id)
+          clearTimerConfig()
+          setActiveEntryId(null)
+          setStatus('idle')
+          return
+        }
+
+        setElapsedTime(effective)
         setStatus('running')
         startTicking()
       }
@@ -198,9 +277,12 @@ export function useTimer(): UseTimerReturn {
         .single()
 
       if (error) {
-        console.error('[useTimer] Erro ao criar time_entry:', error.message)
+        console.error('[TimerContext] Erro ao criar time_entry:', error.message)
         return
       }
+
+      // Persistir config no localStorage
+      saveTimerConfig({ mode: modeRef.current, pomodoroDuration: pomoDurationRef.current })
 
       setActiveEntryId(data.id)
       setElapsedTime(0)
@@ -229,7 +311,7 @@ export function useTimer(): UseTimerReturn {
         .single()
 
       if (error) {
-        console.error('[useTimer] Erro ao criar pausa:', error.message)
+        console.error('[TimerContext] Erro ao criar pausa:', error.message)
         return
       }
 
@@ -253,11 +335,10 @@ export function useTimer(): UseTimerReturn {
       .single()
 
     if (error) {
-      console.error('[useTimer] Erro ao fechar pausa:', error.message)
+      console.error('[TimerContext] Erro ao fechar pausa:', error.message)
       return
     }
 
-    // Acumular tempo pausado
     if (data.start_time && data.end_time) {
       const pauseDuration = Math.floor(
         (new Date(data.end_time).getTime() - new Date(data.start_time).getTime()) / 1000,
@@ -277,7 +358,6 @@ export function useTimer(): UseTimerReturn {
 
     const now = new Date().toISOString()
 
-    // Se estava pausado, fechar a pausa aberta primeiro
     if (activePauseIdRef.current) {
       await supabase
         .from('pauses')
@@ -296,9 +376,12 @@ export function useTimer(): UseTimerReturn {
       .eq('id', activeEntryId)
 
     if (error) {
-      console.error('[useTimer] Erro ao finalizar time_entry:', error.message)
+      console.error('[TimerContext] Erro ao finalizar time_entry:', error.message)
       return
     }
+
+    // Limpar localStorage
+    clearTimerConfig()
 
     setActiveEntryId(null)
     setElapsedTime(0)
@@ -310,18 +393,27 @@ export function useTimer(): UseTimerReturn {
   // Manter ref sincronizada para o auto-stop do pomodoro
   useEffect(() => { stopTimerRef.current = stopTimer }, [stopTimer])
 
-  return {
+  // ----- Setters protegidos (só quando idle) -----
+
+  const setMode = useCallback((m: TimerMode) => {
+    if (status !== 'idle') return
+    setModeState(m)
+  }, [status])
+
+  const setPomodoroDuration = useCallback((s: number) => {
+    if (status !== 'idle') return
+    setPomodoroDurationState(s)
+  }, [status])
+
+  // ----- Valor do contexto -----
+
+  const value: TimerContextValue = {
     elapsedTime,
     remainingTime,
     mode,
-    setMode: (m: TimerMode) => {
-      // Só permite trocar modo quando idle
-      if (status === 'idle') setMode(m)
-    },
+    setMode,
     pomodoroDuration,
-    setPomodoroDuration: (s: number) => {
-      if (status === 'idle') setPomodoroDuration(s)
-    },
+    setPomodoroDuration,
     status,
     isRunning: status === 'running',
     isPaused: status === 'paused',
@@ -331,4 +423,16 @@ export function useTimer(): UseTimerReturn {
     resumeTimer,
     stopTimer,
   }
+
+  return <TimerContext.Provider value={value}>{children}</TimerContext.Provider>
+}
+
+// ----- Hook de consumo -----
+
+export function useTimerContext(): TimerContextValue {
+  const ctx = useContext(TimerContext)
+  if (!ctx) {
+    throw new Error('useTimerContext deve ser usado dentro de <TimerProvider>')
+  }
+  return ctx
 }
