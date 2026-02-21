@@ -1,4 +1,3 @@
-// ==========================================
-// ChronosFlow - Layout Components
-// ==========================================
-// Barrel export para componentes de layout (Sidebar, Header, etc).
+export { Layout } from './Layout'
+export { Sidebar } from './Sidebar'
+export { MobileNav } from './MobileNav'

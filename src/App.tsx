@@ -1,20 +1,22 @@
-import { Timer } from 'lucide-react'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Layout } from '@/components/layout/Layout'
+import { Dashboard } from '@/pages/Dashboard'
+import { Work } from '@/pages/Work'
+import { Study } from '@/pages/Study'
+import { SettingsPage } from '@/pages/Settings'
 
 function App() {
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <div className="mb-4 flex items-center justify-center gap-3">
-          <Timer className="h-10 w-10 text-primary-500" />
-          <h1 className="text-4xl font-bold text-slate-100">
-            ChronosFlow
-          </h1>
-        </div>
-        <p className="text-slate-400">
-          Produtividade híbrida — Trabalho Ágil + Estudos
-        </p>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="work" element={<Work />} />
+          <Route path="study" element={<Study />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
 
