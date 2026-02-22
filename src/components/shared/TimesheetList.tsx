@@ -117,6 +117,7 @@ function SessionRow({
   const canEdit = entry.end_time !== null
 
   const handleStartEdit = (e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
     if (!entry.end_time) return
     // Preencher com o HH:MM atual do end_time
@@ -128,14 +129,14 @@ function SessionRow({
     setIsEditing(true)
   }
 
-  const handleCancelEdit = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleCancelEdit = (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     setIsEditing(false)
     setEditError(null)
   }
 
-  const handleSaveEdit = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleSaveEdit = async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     if (!entry.end_time) return
 
     const [hStr, mStr] = editValue.split(':')
@@ -209,11 +210,11 @@ function SessionRow({
   }
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/40">
+    <div className={`rounded-xl border bg-slate-950/40 ${isEditing ? 'border-primary-500/40' : 'border-slate-800'}`}>
       {/* Linha principal clicável */}
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => !isEditing && setExpanded((v) => !v)}
         className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-800/30"
       >
         {/* Chevron */}
@@ -229,53 +230,7 @@ function SessionRow({
         <span className="shrink-0 text-xs text-slate-400">
           {formatHour(entry.start_time)}
           {' — '}
-          {isEditing ? (
-            <span
-              className="inline-flex items-center gap-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <input
-                type="time"
-                value={editValue}
-                onChange={(e) => {
-                  setEditValue(e.target.value)
-                  setEditError(null)
-                }}
-                className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-xs text-slate-200 focus:border-primary-500 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleSaveEdit}
-                disabled={isSaving}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-emerald-400 hover:bg-emerald-500/10 active:bg-emerald-500/20 disabled:opacity-50"
-                title="Salvar"
-              >
-                <Check className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelEdit}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-700 active:bg-slate-600"
-                title="Cancelar"
-              >
-                <XIcon className="h-4 w-4" />
-              </button>
-            </span>
-          ) : (
-            <>
-              {entry.end_time ? formatHour(entry.end_time) : 'em aberto'}
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={handleStartEdit}
-                  className="ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-700 hover:text-slate-300 active:bg-slate-600"
-                  title="Editar fim"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </>
-          )}
+          {entry.end_time ? formatHour(entry.end_time) : 'em aberto'}
         </span>
 
         {/* Categoria */}
@@ -307,17 +262,73 @@ function SessionRow({
             {entry.pauses.length}
           </span>
         )}
+
+        {/* Botão editar — fica na linha principal */}
+        {canEdit && !isEditing && (
+          <button
+            type="button"
+            onClick={handleStartEdit}
+            className="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-700 hover:text-slate-300 active:bg-slate-600"
+            title="Editar fim"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
       </button>
 
-      {/* Erro de edição */}
-      {editError && (
-        <p className="px-4 pb-1 text-[11px] text-red-400">{editError}</p>
-      )}
+      {/* Painel de edição expandido */}
+      <div
+        className={`overflow-hidden transition-all duration-200 ease-in-out ${
+          isEditing ? 'max-h-60 opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="border-t border-dashed border-primary-500/30 px-4 py-3 space-y-3">
+          <div className="space-y-1.5">
+            <label htmlFor={`edit-end-${entry.id}`} className="block text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+              Horário de término
+            </label>
+            <input
+              id={`edit-end-${entry.id}`}
+              type="time"
+              value={editValue}
+              onChange={(e) => {
+                setEditValue(e.target.value)
+                setEditError(null)
+              }}
+              className="block w-full rounded-lg border border-slate-600 bg-slate-800 px-4 py-2.5 text-sm text-slate-200 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+            />
+          </div>
+
+          {editError && (
+            <p className="text-[11px] text-red-400">{editError}</p>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-700 text-sm font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200 active:bg-slate-700"
+            >
+              <XIcon className="h-4 w-4" />
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveEdit}
+              disabled={isSaving}
+              className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary-600 text-sm font-medium text-white transition-colors hover:bg-primary-500 active:bg-primary-700 disabled:opacity-50"
+            >
+              <Check className="h-4 w-4" />
+              Salvar
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Pausas (acordeão com animação) */}
       <div
         className={`overflow-hidden transition-all duration-200 ease-in-out ${
-          expanded ? 'max-h-[500px] opacity-100 pb-3' : 'max-h-0 opacity-0'
+          expanded && !isEditing ? 'max-h-[500px] opacity-100 pb-3' : 'max-h-0 opacity-0'
         }`}
       >
         <div className="border-t border-dashed border-slate-800 px-4 pt-2">

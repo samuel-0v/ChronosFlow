@@ -111,7 +111,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 />
               ) : (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600/20 text-xs font-bold text-primary-400">
-                  {profile?.full_name?.charAt(0).toUpperCase() ?? user?.email?.charAt(0).toUpperCase() ?? 'U'}
+                  {(() => {
+                    const name = profile?.full_name ?? user?.user_metadata?.full_name ?? ''
+                    const parts = (name as string).trim().split(/\s+/)
+                    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+                    if (parts[0]) return parts[0][0].toUpperCase()
+                    return user?.email?.charAt(0).toUpperCase() ?? 'U'
+                  })()}
                 </div>
               )}
             </NavLink>
