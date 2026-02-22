@@ -23,7 +23,8 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
   const [title, setTitle] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [priority, setPriority] = useState<TaskPriority>(3)
-  const [dueDate, setDueDate] = useState('')
+  const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0])
+  const [estimatedTime, setEstimatedTime] = useState('')
 
   // Estado de submissão
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -54,6 +55,7 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
           category_id: categoryId || null,
           priority,
           due_date: dueDate || null,
+          estimated_time: estimatedTime ? Number(estimatedTime) : null,
         },
       ])
 
@@ -69,7 +71,8 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
     setTitle('')
     setCategoryId('')
     setPriority(3)
-    setDueDate('')
+    setDueDate(new Date().toISOString().split('T')[0])
+    setEstimatedTime('')
     onSuccess()
   }
 
@@ -129,6 +132,20 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
+          min={new Date().toISOString().split('T')[0]}
+        />
+      </div>
+
+      {/* Tempo estimado */}
+      <div className="space-y-1.5">
+        <Label htmlFor="task-estimated-time">Tempo estimado (minutos)</Label>
+        <Input
+          id="task-estimated-time"
+          type="number"
+          placeholder="Ex: 60"
+          value={estimatedTime}
+          onChange={(e) => setEstimatedTime(e.target.value)}
+          min={1}
         />
       </div>
 

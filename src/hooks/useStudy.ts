@@ -1,12 +1,14 @@
 // ==========================================
 // ChronosFlow - useStudy Hook
 // ==========================================
-// Busca study_notes (recentes) e flashcards (próximos a revisar).
+// Busca study_notes (recentes), flashcards (próximos a revisar)
+// e time_entries de estudo (com pausas, agrupadas por dia).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import type { StudyNote, Flashcard, Category } from '@/types'
+import { groupEntriesByDay } from '@/hooks/useWork'
+import type { StudyNote, Flashcard, Category, TimeEntryWithDetails, GroupedEntries } from '@/types'
 
 // ----- Tipos auxiliares -----
 
@@ -21,11 +23,15 @@ export type FlashcardWithCategory = Flashcard & {
 interface UseStudyReturn {
   notes: StudyNoteWithCategory[]
   flashcards: FlashcardWithCategory[]
+  studyEntries: TimeEntryWithDetails[]
+  groupedStudyEntries: GroupedEntries
   isLoadingNotes: boolean
   isLoadingFlashcards: boolean
+  isLoadingStudyEntries: boolean
   isReviewing: boolean
   refetchNotes: () => void
   refetchFlashcards: () => void
+  refetchStudyEntries: () => void
   reviewFlashcard: (cardId: string, grade: number) => Promise<void>
 }
 
@@ -36,14 +42,18 @@ export function useStudy(): UseStudyReturn {
 
   const [notes, setNotes] = useState<StudyNoteWithCategory[]>([])
   const [flashcards, setFlashcards] = useState<FlashcardWithCategory[]>([])
+  const [studyEntries, setStudyEntries] = useState<TimeEntryWithDetails[]>([])
   const [isLoadingNotes, setIsLoadingNotes] = useState(true)
   const [isLoadingFlashcards, setIsLoadingFlashcards] = useState(true)
+  const [isLoadingStudyEntries, setIsLoadingStudyEntries] = useState(true)
   const [isReviewing, setIsReviewing] = useState(false)
   const [notesTick, setNotesTick] = useState(0)
   const [flashcardsTick, setFlashcardsTick] = useState(0)
+  const [studyEntriesTick, setStudyEntriesTick] = useState(0)
 
   const refetchNotes = () => setNotesTick((t) => t + 1)
   const refetchFlashcards = () => setFlashcardsTick((t) => t + 1)
+  const refetchStudyEntries = () => setStudyEntriesTick((t) => t + 1)
 
   // ----- Fetch notes -----
   useEffect(() => {
@@ -95,6 +105,38 @@ export function useStudy(): UseStudyReturn {
       })
   }, [user, flashcardsTick])
 
+  // ----- Fetch study time_entries (com pausas) -----
+  useEffect(() => {
+    if (!user) {
+      setStudyEntries([])
+      setIsLoadingStudyEntries(false)
+      return
+    }
+
+    setIsLoadingStudyEntries(true)
+
+    supabase
+      .from('time_entries')
+      .select('*, categories(name, color_hex), tasks(title), pauses(*)')
+      .eq('user_id', user.id)
+      .eq('session_type', 'STUDY')
+      .order('start_time', { ascending: false })
+      .limit(50)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[useStudy] Erro ao buscar study entries:', error.message)
+        }
+        setStudyEntries((data as TimeEntryWithDetails[]) ?? [])
+        setIsLoadingStudyEntries(false)
+      })
+  }, [user, studyEntriesTick])
+
+  // Agrupamento memoizado
+  const groupedStudyEntries = useMemo(
+    () => groupEntriesByDay(studyEntries),
+    [studyEntries],
+  )
+
   // ----- SM-2 Spaced Repetition -----
   const reviewFlashcard = async (cardId: string, grade: number) => {
     const card = flashcards.find((fc) => fc.id === cardId)
@@ -144,11 +186,15 @@ export function useStudy(): UseStudyReturn {
   return {
     notes,
     flashcards,
+    studyEntries,
+    groupedStudyEntries,
     isLoadingNotes,
     isLoadingFlashcards,
+    isLoadingStudyEntries,
     isReviewing,
     refetchNotes,
     refetchFlashcards,
+    refetchStudyEntries,
     reviewFlashcard,
   }
 }

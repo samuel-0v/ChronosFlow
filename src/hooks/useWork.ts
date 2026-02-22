@@ -4,10 +4,10 @@
 // Busca tarefas de trabalho (categorias WORK) e time_entries recentes
 // do tipo WORK. Expõe updateTaskStatus para mover cards no Kanban.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import type { Task, TimeEntry, Category, TaskStatus } from '@/types'
+import type { Task, Category, TaskStatus, TimeEntryWithDetails, GroupedEntries } from '@/types'
 
 // ----- Tipos auxiliares -----
 
@@ -15,14 +15,23 @@ export type TaskWithCategory = Task & {
   categories: Pick<Category, 'name' | 'color_hex'> | null
 }
 
-export type TimeEntryWithDetails = TimeEntry & {
-  categories: Pick<Category, 'name' | 'color_hex'> | null
-  tasks: Pick<Task, 'title'> | null
+// ----- Helpers -----
+
+/** Agrupa entries por dia (chave = 'YYYY-MM-DD' do start_time) */
+export function groupEntriesByDay(entries: TimeEntryWithDetails[]): GroupedEntries {
+  const grouped: GroupedEntries = {}
+  for (const entry of entries) {
+    const day = entry.start_time.slice(0, 10) // 'YYYY-MM-DD'
+    if (!grouped[day]) grouped[day] = []
+    grouped[day].push(entry)
+  }
+  return grouped
 }
 
 type UseWorkReturn = {
   tasks: TaskWithCategory[]
   timeEntries: TimeEntryWithDetails[]
+  groupedEntries: GroupedEntries
   isLoadingTasks: boolean
   isLoadingEntries: boolean
   isUpdating: boolean
@@ -72,7 +81,7 @@ export function useWork(): UseWorkReturn {
       })
   }, [user, tasksTick])
 
-  // ----- Fetch time_entries (WORK, últimas 50) -----
+  // ----- Fetch time_entries (WORK, últimas 50, com pausas) -----
   useEffect(() => {
     if (!user) {
       setTimeEntries([])
@@ -84,7 +93,7 @@ export function useWork(): UseWorkReturn {
 
     supabase
       .from('time_entries')
-      .select('*, categories(name, color_hex), tasks(title)')
+      .select('*, categories(name, color_hex), tasks(title), pauses(*)')
       .eq('user_id', user.id)
       .eq('session_type', 'WORK')
       .order('start_time', { ascending: false })
@@ -97,6 +106,9 @@ export function useWork(): UseWorkReturn {
         setIsLoadingEntries(false)
       })
   }, [user, entriesTick])
+
+  // Agrupamento memoizado
+  const groupedEntries = useMemo(() => groupEntriesByDay(timeEntries), [timeEntries])
 
   // ----- Atualizar status da tarefa (Kanban) -----
   const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
@@ -118,6 +130,7 @@ export function useWork(): UseWorkReturn {
   return {
     tasks,
     timeEntries,
+    groupedEntries,
     isLoadingTasks,
     isLoadingEntries,
     isUpdating,

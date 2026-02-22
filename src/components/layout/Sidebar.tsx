@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Briefcase, BookOpen, Settings, Timer, X, LogOut } from 'lucide-react'
+import { Home, Briefcase, BookOpen, Tag, Timer, X, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface NavItem {
@@ -12,7 +12,7 @@ const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: <Home className="h-5 w-5" /> },
   { to: '/work', label: 'Trabalho', icon: <Briefcase className="h-5 w-5" /> },
   { to: '/study', label: 'Estudos', icon: <BookOpen className="h-5 w-5" /> },
-  { to: '/settings', label: 'Configurações', icon: <Settings className="h-5 w-5" /> },
+  { to: '/settings', label: 'Categorias', icon: <Tag className="h-5 w-5" /> },
 ]
 
 interface SidebarProps {

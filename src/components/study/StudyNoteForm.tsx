@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { Send } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTimerContext } from '@/contexts/TimerContext'
 import { useCategories } from '@/hooks/useCategories'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Textarea'
@@ -15,6 +16,7 @@ interface StudyNoteFormProps {
 
 export function StudyNoteForm({ onSuccess }: StudyNoteFormProps) {
   const { user } = useAuth()
+  const { activeEntryId } = useTimerContext()
   const { categories, isLoading: categoriesLoading } = useCategories()
 
   const [content, setContent] = useState('')
@@ -48,6 +50,7 @@ export function StudyNoteForm({ onSuccess }: StudyNoteFormProps) {
           content: content.trim(),
           category_id: categoryId || null,
           note_type: noteType,
+          time_entry_id: activeEntryId ?? null,
         },
       ])
 

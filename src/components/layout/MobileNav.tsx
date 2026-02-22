@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Briefcase, BookOpen, LogOut } from 'lucide-react'
+import { Home, Briefcase, BookOpen, Tag, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface MobileNavItem {
@@ -12,6 +12,7 @@ const navItems: MobileNavItem[] = [
   { to: '/', label: 'Home', icon: <Home className="h-5 w-5" /> },
   { to: '/work', label: 'Trabalho', icon: <Briefcase className="h-5 w-5" /> },
   { to: '/study', label: 'Estudos', icon: <BookOpen className="h-5 w-5" /> },
+  { to: '/settings', label: 'Categorias', icon: <Tag className="h-5 w-5" /> },
 ]
 
 export function MobileNav() {

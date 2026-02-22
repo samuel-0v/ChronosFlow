@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { Briefcase, LayoutGrid, Clock, Loader2 } from 'lucide-react'
 import { useWork } from '@/hooks/useWork'
-import { WorkKanban, TimesheetList } from '@/components/work'
+import { WorkKanban } from '@/components/work'
+import { TimesheetList } from '@/components/shared'
 
 type WorkTab = 'kanban' | 'timesheet'
 
 export function Work() {
   const {
     tasks,
-    timeEntries,
+    groupedEntries,
     isLoadingTasks,
     isLoadingEntries,
     isUpdating,
@@ -87,10 +88,12 @@ export function Work() {
               onStatusChange={updateTaskStatus}
             />
           )
-        ) : timeEntries.length === 0 ? (
-          <TimesheetList entries={[]} />
         ) : (
-          <TimesheetList entries={timeEntries} />
+          <TimesheetList
+            groupedEntries={groupedEntries}
+            emptyLabel="Nenhum registro de trabalho."
+            emptyHint="Inicie uma sessão de trabalho no Dashboard."
+          />
         )}
       </div>
     </div>

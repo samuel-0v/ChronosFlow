@@ -16,12 +16,13 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTimerContext } from '@/contexts/TimerContext'
 import { useStats } from '@/hooks/useStats'
+import { useCategories } from '@/hooks/useCategories'
 import { formatTime, formatDuration } from '@/lib/formatTime'
 import { PRIORITY_COLORS, PRIORITY_LABELS, CATEGORY_TYPE_LABELS } from '@/lib/constants'
-import { Modal } from '@/components/ui'
+import { Modal, Select, Input, Label } from '@/components/ui'
 import { TaskForm } from '@/components/tasks'
 import { WeeklyGoalsCard, TodaySummaryCard } from '@/components/dashboard'
-import type { Task, Category, TaskStatus } from '@/types'
+import type { Task, Category, TaskStatus, SessionType } from '@/types'
 
 // ----- Tipo auxiliar para task + categoria -----
 
@@ -57,6 +58,18 @@ function TimerCard() {
     stopTimer,
   } = useTimerContext()
 
+  const { categories, isLoading: categoriesLoading } = useCategories()
+
+  // Seleção de categoria / tarefa para a sessão
+  const [selectedCategoryId, setSelectedCategoryId] = useState('')
+  const [selectedTaskId, setSelectedTaskId] = useState('')
+  const [categoryTasks, setCategoryTasks] = useState<Task[]>([])
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false)
+
+  // Modal de pausa (substitui window.prompt)
+  const [isPauseModalOpen, setIsPauseModalOpen] = useState(false)
+  const [pauseReason, setPauseReason] = useState('')
+
   // Stats do dia
   const [workToday, setWorkToday] = useState(0)
   const [studyToday, setStudyToday] = useState(0)
@@ -90,26 +103,69 @@ function TimerCard() {
       })
   }, [user, status])
 
+  // Buscar tarefas pendentes da categoria selecionada
+  useEffect(() => {
+    if (!user || !selectedCategoryId) {
+      setCategoryTasks([])
+      return
+    }
+
+    setIsLoadingTasks(true)
+
+    supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('category_id', selectedCategoryId)
+      .in('status', ['PENDING', 'IN_PROGRESS'])
+      .order('priority', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[Dashboard] Erro ao buscar tarefas da categoria:', error.message)
+        }
+        setCategoryTasks((data as Task[]) ?? [])
+        setIsLoadingTasks(false)
+      })
+  }, [user, selectedCategoryId])
+
+  // Limpar taskId quando a categoria mudar
+  useEffect(() => {
+    setSelectedTaskId('')
+  }, [selectedCategoryId])
+
+  // Derivar sessionType da categoria selecionada
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId)
+  const derivedSessionType: SessionType =
+    selectedCategory?.type === 'STUDY' ? 'STUDY' : 'WORK'
+
   const handlePlayPause = async () => {
     if (status === 'idle') {
-      const sessionType = mode === 'pomodoro' ? 'STUDY' : 'WORK'
-      await startTimer(sessionType)
+      if (!selectedCategoryId) return
+      await startTimer(derivedSessionType, selectedTaskId || undefined, selectedCategoryId)
     } else if (isRunning) {
-      const reason = window.prompt('Motivo da pausa (opcional):')
-      await pauseTimer(reason ?? undefined)
+      setIsPauseModalOpen(true)
     } else if (isPaused) {
       await resumeTimer()
     }
   }
 
+  const handleConfirmPause = async () => {
+    await pauseTimer(pauseReason.trim() || undefined)
+    setPauseReason('')
+    setIsPauseModalOpen(false)
+  }
+
   const handleStop = async () => {
     if (status !== 'idle') {
       await stopTimer()
+      setSelectedCategoryId('')
+      setSelectedTaskId('')
     }
   }
 
   const displayTime = mode === 'pomodoro' ? remainingTime : elapsedTime
   const isIdle = status === 'idle'
+  const canStart = isIdle && !!selectedCategoryId
 
   // Progresso do pomodoro (0-100)
   const pomodoroProgress =
@@ -174,6 +230,88 @@ function TimerCard() {
         </div>
       )}
 
+      {/* Seleção de Categoria + Tarefa (quando idle) */}
+      {isIdle && (
+        <div className="mb-6 space-y-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="timer-category" className="text-[11px]">
+              Categoria *
+            </Label>
+            <Select
+              id="timer-category"
+              value={selectedCategoryId}
+              onChange={(e) => setSelectedCategoryId(e.target.value)}
+              disabled={categoriesLoading}
+            >
+              <option value="">Selecione uma categoria</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name} ({CATEGORY_TYPE_LABELS[cat.type]})
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          {selectedCategoryId && (
+            <div className="space-y-1.5">
+              <Label htmlFor="timer-task" className="text-[11px]">
+                Tarefa (opcional)
+              </Label>
+              <Select
+                id="timer-task"
+                value={selectedTaskId}
+                onChange={(e) => setSelectedTaskId(e.target.value)}
+                disabled={isLoadingTasks}
+              >
+                <option value="">Sem tarefa</option>
+                {categoryTasks.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal de pausa */}
+      <Modal
+        isOpen={isPauseModalOpen}
+        onClose={() => setIsPauseModalOpen(false)}
+        title="Pausar Sessão"
+      >
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="pause-reason">Motivo da pausa (opcional)</Label>
+            <Input
+              id="pause-reason"
+              placeholder="Ex: Intervalo para café, reunião..."
+              value={pauseReason}
+              onChange={(e) => setPauseReason(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={() => {
+                setPauseReason('')
+                setIsPauseModalOpen(false)
+              }}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-slate-200"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmPause}
+              className="rounded-lg bg-amber-500/15 px-4 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/25"
+            >
+              Pausar
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Status badge */}
       <div className="mb-2 text-center">
         <span
@@ -190,7 +328,9 @@ function TimerCard() {
           {isRunning
             ? mode === 'pomodoro'
               ? 'Pomodoro em andamento'
-              : 'Em andamento — Trabalho'
+              : derivedSessionType === 'STUDY'
+                ? 'Em andamento — Estudo'
+                : 'Em andamento — Trabalho'
             : isPaused
               ? 'Pausado'
               : 'Parado'}
@@ -233,14 +373,15 @@ function TimerCard() {
 
         <button
           onClick={handlePlayPause}
-          className={`flex h-16 w-16 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 ${
+          disabled={isIdle && !canStart}
+          className={`flex h-16 w-16 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 ${
             isPaused
               ? 'bg-amber-500 shadow-amber-500/25'
               : mode === 'pomodoro'
                 ? 'bg-rose-600 shadow-rose-600/25'
                 : 'bg-primary-600 shadow-primary-600/25'
           }`}
-          title={isRunning ? 'Pausar' : isPaused ? 'Retomar' : 'Iniciar'}
+          title={isRunning ? 'Pausar' : isPaused ? 'Retomar' : canStart ? 'Iniciar' : 'Selecione uma categoria'}
         >
           {isRunning ? (
             <Pause className="h-6 w-6" />
