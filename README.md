@@ -1,73 +1,65 @@
-# React + TypeScript + Vite
+# 🚀 ChronosFlow
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+O **ChronosFlow** é um ecossistema de produtividade pessoal desenvolvido para otimizar a gestão de tempo e o foco. O projeto combina um gerenciador de tarefas inteligente com ferramentas de rastreamento de tempo (Time Tracking), pomodoro e flashcards para estudo, tudo operando sob uma arquitetura moderna de **PWA (Progressive Web App)**.
 
-Currently, two official plugins are available:
+## 🎯 Funcionalidades Principais
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+* **⏱️ Timer Dual:** Alternância inteligente entre Cronômetro Livre e Pomodoro, com integração direta ao registro de horas (Timesheet).
+* **📋 Gestão de Tarefas:** Sistema de tarefas com priorização e filtros por categoria (Estudo/Trabalho).
+* **🃏 Flashcards:** Sistema de repetição espaçada para memorização (ideal para aprendizado de idiomas).
+* **📊 Dashboards Dinâmicos:** Visualização de estatísticas diárias e semanais de produtividade.
+* **📱 PWA Nativo:** Instalável em dispositivos Android/iOS com suporte offline e carregamento instantâneo.
+* **⚡ Optimistic UI:** Experiência de uso fluida onde as atualizações refletem na interface antes mesmo da confirmação do servidor.
 
-## React Compiler
+## 🛠️ Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* **Frontend:** React 18 + TypeScript + Vite.
+* **Estilização:** Tailwind CSS (com suporte a temas escuros e animações de glow).
+* **Backend/Auth:** Supabase (PostgreSQL + Auth + Edge Functions).
+* **PWA:** `vite-plugin-pwa` para Service Workers e Manifesto.
+* **Ícones:** Lucide React.
 
-## Expanding the ESLint configuration
+## 📦 Instalação e Execução
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. **Clone o repositório:**
+```bash
+git clone https://github.com/Samuel-Victor-Alventino-Silva/ChronosFlow.git
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+2. **Instale as dependências:**
+```bash
+npm install
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+
+
+3. **Configure as variáveis de ambiente:**
+Crie um arquivo `.env` na raiz e adicione suas chaves do Supabase:
+```env
+VITE_SUPABASE_URL=seu_url_aqui
+VITE_SUPABASE_ANON_KEY=sua_chave_aqui
+
+```
+
+
+4. **Execute o projeto:**
+```bash
+npm run dev
+
+```
+
+
+
+## 🔒 Segurança & Database
+
+O projeto segue as melhores práticas de banco de dados PostgreSQL no Supabase, incluindo:
+
+* **RLS (Row Level Security):** Seus dados são protegidos e acessíveis apenas por você.
+* **Triggers:** Automação para criação de perfis de usuário via `handle_new_user`.
+* **Search Path Security:** Funções de banco protegidas contra ataques de injeção.
+
+## 👤 Autor
+
+**Samuel Victor Alventino Silva** *Estudante de Sistemas de Informação - UFU*
