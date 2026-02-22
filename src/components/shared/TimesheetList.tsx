@@ -5,7 +5,11 @@ import {
   ChevronDown,
   ChevronRight,
   PauseCircle,
+  Pencil,
+  Check,
+  X as XIcon,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { Modal } from '@/components/ui'
 import { formatTime } from '@/lib/formatTime'
 import type { GroupedEntries, TimeEntryWithDetails, Pause } from '@/types'
@@ -16,6 +20,8 @@ interface TimesheetListProps {
   groupedEntries: GroupedEntries
   emptyLabel?: string
   emptyHint?: string
+  /** Chamado após edição bem-sucedida de end_time */
+  onEntryUpdated?: () => void
 }
 
 // ----- Helpers -----
@@ -94,9 +100,113 @@ function PauseAccordion({ pauses }: { pauses: Pause[] }) {
 
 // ----- Linha de sessão no modal -----
 
-function SessionRow({ entry }: { entry: TimeEntryWithDetails }) {
+function SessionRow({
+  entry,
+  onEntryUpdated,
+}: {
+  entry: TimeEntryWithDetails
+  onEntryUpdated?: () => void
+}) {
   const [expanded, setExpanded] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
   const hasPauses = entry.pauses.length > 0
+
+  const canEdit = entry.end_time !== null
+
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!entry.end_time) return
+    // Preencher com o HH:MM atual do end_time
+    const d = new Date(entry.end_time)
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    setEditValue(`${hh}:${mm}`)
+    setEditError(null)
+    setIsEditing(true)
+  }
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsEditing(false)
+    setEditError(null)
+  }
+
+  const handleSaveEdit = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!entry.end_time) return
+
+    const [hStr, mStr] = editValue.split(':')
+    const hours = Number(hStr)
+    const minutes = Number(mStr)
+
+    if (isNaN(hours) || isNaN(minutes)) {
+      setEditError('Horário inválido.')
+      return
+    }
+
+    // Construir novo end_time mantendo a mesma data base
+    const original = new Date(entry.end_time)
+    const newEnd = new Date(original)
+    newEnd.setHours(hours, minutes, 0, 0)
+
+    const startDate = new Date(entry.start_time)
+
+    // Validação: deve ser > start_time
+    if (newEnd.getTime() <= startDate.getTime()) {
+      setEditError('Deve ser posterior ao início.')
+      return
+    }
+
+    // Validação: só pode reduzir (não aumentar)
+    if (newEnd.getTime() > original.getTime()) {
+      setEditError('Só é permitido reduzir o horário.')
+      return
+    }
+
+    // Recalcular total_duration (em segundos), descontando pausas
+    let pauseSeconds = 0
+    for (const p of entry.pauses) {
+      if (p.end_time) {
+        const pStart = new Date(p.start_time).getTime()
+        const pEnd = new Date(p.end_time).getTime()
+        // Só contar pausas que ainda cabem no novo intervalo
+        const effectiveStart = Math.max(pStart, startDate.getTime())
+        const effectiveEnd = Math.min(pEnd, newEnd.getTime())
+        if (effectiveEnd > effectiveStart) {
+          pauseSeconds += Math.floor((effectiveEnd - effectiveStart) / 1000)
+        }
+      }
+    }
+
+    const totalSeconds = Math.floor(
+      (newEnd.getTime() - startDate.getTime()) / 1000,
+    ) - pauseSeconds
+
+    setIsSaving(true)
+
+    const { error } = await supabase
+      .from('time_entries')
+      .update({
+        end_time: newEnd.toISOString(),
+        total_duration: Math.max(totalSeconds, 0),
+      })
+      .eq('id', entry.id)
+
+    setIsSaving(false)
+
+    if (error) {
+      console.error('[TimesheetList] Erro ao atualizar end_time:', error.message)
+      setEditError('Erro ao salvar.')
+      return
+    }
+
+    setIsEditing(false)
+    setEditError(null)
+    onEntryUpdated?.()
+  }
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950/40">
@@ -119,7 +229,53 @@ function SessionRow({ entry }: { entry: TimeEntryWithDetails }) {
         <span className="shrink-0 text-xs text-slate-400">
           {formatHour(entry.start_time)}
           {' — '}
-          {entry.end_time ? formatHour(entry.end_time) : 'em aberto'}
+          {isEditing ? (
+            <span
+              className="inline-flex items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="time"
+                value={editValue}
+                onChange={(e) => {
+                  setEditValue(e.target.value)
+                  setEditError(null)
+                }}
+                className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-xs text-slate-200 focus:border-primary-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                className="rounded p-0.5 text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+                title="Salvar"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="rounded p-0.5 text-slate-500 hover:bg-slate-700"
+                title="Cancelar"
+              >
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ) : (
+            <>
+              {entry.end_time ? formatHour(entry.end_time) : 'em aberto'}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  className="ml-1.5 inline-flex rounded p-0.5 text-slate-600 transition-colors hover:bg-slate-700 hover:text-slate-300"
+                  title="Editar fim"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              )}
+            </>
+          )}
         </span>
 
         {/* Categoria */}
@@ -153,6 +309,11 @@ function SessionRow({ entry }: { entry: TimeEntryWithDetails }) {
         )}
       </button>
 
+      {/* Erro de edição */}
+      {editError && (
+        <p className="px-4 pb-1 text-[11px] text-red-400">{editError}</p>
+      )}
+
       {/* Pausas (acordeão com animação) */}
       <div
         className={`overflow-hidden transition-all duration-200 ease-in-out ${
@@ -176,6 +337,7 @@ export function TimesheetList({
   groupedEntries,
   emptyLabel = 'Nenhum registro de tempo.',
   emptyHint = 'Inicie uma sessão no Dashboard.',
+  onEntryUpdated,
 }: TimesheetListProps) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
@@ -249,7 +411,7 @@ export function TimesheetList({
 
           {/* Sessões */}
           {selectedEntries.map((entry) => (
-            <SessionRow key={entry.id} entry={entry} />
+            <SessionRow key={entry.id} entry={entry} onEntryUpdated={onEntryUpdated} />
           ))}
         </div>
       </Modal>

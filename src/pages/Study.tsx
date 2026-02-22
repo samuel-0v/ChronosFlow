@@ -22,6 +22,7 @@ export function Study() {
     isLoadingStudyEntries,
     refetchNotes,
     refetchFlashcards,
+    refetchStudyEntries,
     reviewFlashcard,
   } = useStudy()
 
@@ -183,6 +184,7 @@ export function Study() {
               groupedEntries={groupedStudyEntries}
               emptyLabel="Nenhum registro de estudo."
               emptyHint="Inicie uma sessão de estudo no Dashboard."
+              onEntryUpdated={refetchStudyEntries}
             />
           )}
         </div>

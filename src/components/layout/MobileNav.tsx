@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Briefcase, BookOpen, Tag, LogOut } from 'lucide-react'
+import { Home, Briefcase, BookOpen, Tag, LogOut, User } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useProfile } from '@/hooks/useProfile'
 
 interface MobileNavItem {
   to: string
@@ -17,6 +18,7 @@ const navItems: MobileNavItem[] = [
 
 export function MobileNav() {
   const { signOut } = useAuth()
+  const { profile } = useProfile()
   const navigate = useNavigate()
 
   const handleSignOut = async () => {
@@ -53,6 +55,29 @@ export function MobileNav() {
           <LogOut className="h-5 w-5" />
           Sair
         </button>
+
+        {/* Perfil */}
+        <NavLink
+          to="/profile"
+          className={({ isActive }) =>
+            `flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors ${
+              isActive
+                ? 'text-primary-400'
+                : 'text-slate-500 hover:text-slate-300'
+            }`
+          }
+        >
+          {profile?.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt="Avatar"
+              className="h-5 w-5 rounded-full object-cover"
+            />
+          ) : (
+            <User className="h-5 w-5" />
+          )}
+          Perfil
+        </NavLink>
       </div>
     </nav>
   )

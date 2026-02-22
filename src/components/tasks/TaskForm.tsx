@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCategories } from '@/hooks/useCategories'
+import { getLocalISODate } from '@/lib/formatTime'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -23,7 +24,7 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
   const [title, setTitle] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [priority, setPriority] = useState<TaskPriority>(3)
-  const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0])
+  const [dueDate, setDueDate] = useState(getLocalISODate())
   const [estimatedTime, setEstimatedTime] = useState('')
 
   // Estado de submissão
@@ -71,7 +72,7 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
     setTitle('')
     setCategoryId('')
     setPriority(3)
-    setDueDate(new Date().toISOString().split('T')[0])
+    setDueDate(getLocalISODate())
     setEstimatedTime('')
     onSuccess()
   }
@@ -132,7 +133,7 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          min={new Date().toISOString().split('T')[0]}
+          min={getLocalISODate()}
         />
       </div>
 

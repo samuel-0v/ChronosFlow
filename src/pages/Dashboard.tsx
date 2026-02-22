@@ -17,7 +17,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useTimerContext } from '@/contexts/TimerContext'
 import { useStats } from '@/hooks/useStats'
 import { useCategories } from '@/hooks/useCategories'
-import { formatTime, formatDuration } from '@/lib/formatTime'
+import { formatTime, formatDuration, localMidnightISO } from '@/lib/formatTime'
 import { PRIORITY_COLORS, PRIORITY_LABELS, CATEGORY_TYPE_LABELS } from '@/lib/constants'
 import { Modal, Select, Input, Label } from '@/components/ui'
 import { TaskForm } from '@/components/tasks'
@@ -77,14 +77,13 @@ function TimerCard() {
   useEffect(() => {
     if (!user) return
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const todayISO = localMidnightISO()
 
     supabase
       .from('time_entries')
       .select('session_type, total_duration')
       .eq('user_id', user.id)
-      .gte('start_time', today.toISOString())
+      .gte('start_time', todayISO)
       .not('total_duration', 'is', null)
       .then(({ data, error }) => {
         if (error) {

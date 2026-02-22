@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { localMidnightISO } from '@/lib/formatTime'
 
 // ----- Helpers de data (sem dependência externa) -----
 
@@ -28,13 +29,6 @@ function getWeekEnd(): Date {
   sunday.setDate(monday.getDate() + 6)
   sunday.setHours(23, 59, 59, 999)
   return sunday
-}
-
-/** Retorna hoje 00:00 */
-function getTodayStart(): Date {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
 }
 
 // ----- Tipos de retorno -----
@@ -95,7 +89,7 @@ export function useStats(): UseStatsReturn {
 
     const weekStart = getWeekStart().toISOString()
     const weekEnd = getWeekEnd().toISOString()
-    const todayStart = getTodayStart().toISOString()
+    const todayStart = localMidnightISO()
 
     // Executar as 3 queries em paralelo
     const profilePromise = supabase

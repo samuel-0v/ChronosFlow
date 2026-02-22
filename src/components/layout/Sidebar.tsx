@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Home, Briefcase, BookOpen, Tag, Timer, X, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useProfile } from '@/hooks/useProfile'
 
 interface NavItem {
   to: string
@@ -22,6 +23,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user, signOut } = useAuth()
+  const { profile } = useProfile()
   const navigate = useNavigate()
 
   const handleSignOut = async () => {
@@ -94,12 +96,27 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Footer */}
         <div className="border-t border-slate-800 px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-600/20 text-xs font-bold text-primary-400">
-              {user?.email?.charAt(0).toUpperCase() ?? 'U'}
-            </div>
+            <NavLink
+              to="/profile"
+              onClick={onClose}
+              className="shrink-0 rounded-full ring-2 ring-transparent transition-all hover:ring-primary-500"
+              title="Editar perfil"
+            >
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt="Avatar"
+                  className="h-8 w-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600/20 text-xs font-bold text-primary-400">
+                  {profile?.full_name?.charAt(0).toUpperCase() ?? user?.email?.charAt(0).toUpperCase() ?? 'U'}
+                </div>
+              )}
+            </NavLink>
             <div className="flex-1 min-w-0">
               <p className="truncate text-sm font-medium text-slate-200">
-                {user?.user_metadata?.full_name ?? 'Usuário'}
+                {profile?.full_name ?? user?.user_metadata?.full_name ?? 'Usuário'}
               </p>
               <p className="truncate text-xs text-slate-500">{user?.email}</p>
             </div>

@@ -13,6 +13,7 @@ export function Work() {
     isLoadingTasks,
     isLoadingEntries,
     isUpdating,
+    refetchEntries,
     updateTaskStatus,
   } = useWork()
 
@@ -93,6 +94,7 @@ export function Work() {
             groupedEntries={groupedEntries}
             emptyLabel="Nenhum registro de trabalho."
             emptyHint="Inicie uma sessão de trabalho no Dashboard."
+            onEntryUpdated={refetchEntries}
           />
         )}
       </div>

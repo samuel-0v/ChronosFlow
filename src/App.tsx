@@ -8,6 +8,7 @@ import { Dashboard } from '@/pages/Dashboard'
 import { Work } from '@/pages/Work'
 import { Study } from '@/pages/Study'
 import { SettingsPage } from '@/pages/Settings'
+import { Profile } from '@/pages/Profile'
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
               <Route path="work" element={<Work />} />
               <Route path="study" element={<Study />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
           </Route>
         </Routes>

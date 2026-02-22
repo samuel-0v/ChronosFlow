@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Task, Category, TaskStatus, TimeEntryWithDetails, GroupedEntries } from '@/types'
+import { isoToLocalDate, getLocalISODate } from '@/lib/formatTime'
 
 // ----- Tipos auxiliares -----
 
@@ -17,11 +18,11 @@ export type TaskWithCategory = Task & {
 
 // ----- Helpers -----
 
-/** Agrupa entries por dia (chave = 'YYYY-MM-DD' do start_time) */
+/** Agrupa entries por dia (chave = 'YYYY-MM-DD' local do start_time) */
 export function groupEntriesByDay(entries: TimeEntryWithDetails[]): GroupedEntries {
   const grouped: GroupedEntries = {}
   for (const entry of entries) {
-    const day = entry.start_time.slice(0, 10) // 'YYYY-MM-DD'
+    const day = isoToLocalDate(entry.start_time)
     if (!grouped[day]) grouped[day] = []
     grouped[day].push(entry)
   }
@@ -66,11 +67,14 @@ export function useWork(): UseWorkReturn {
 
     setIsLoadingTasks(true)
 
+    const today = getLocalISODate()
+
     supabase
       .from('tasks')
       .select('*, categories!inner(name, color_hex)')
       .eq('user_id', user.id)
       .eq('categories.type', 'WORK')
+      .or(`status.neq.COMPLETED,due_date.gte.${today}`)
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
         if (error) {

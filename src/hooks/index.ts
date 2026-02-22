@@ -1,4 +1,5 @@
 export { useCategories } from './useCategories'
+export { useProfile } from './useProfile'
 export { useStats } from './useStats'
 export { useStudy } from './useStudy'
 export { useWork } from './useWork'
