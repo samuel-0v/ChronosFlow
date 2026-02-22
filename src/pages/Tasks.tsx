@@ -81,7 +81,7 @@ function TaskCard({
       <div className="flex items-start gap-3 px-5 pt-5 pb-3">
         <button
           onClick={() => onToggle(task)}
-          className="mt-0.5 shrink-0 p-0.5 transition-colors hover:text-primary-400"
+          className="mt-0.5 shrink-0 p-1.5 transition-colors hover:text-primary-400 active:text-primary-300"
           title={task.status === 'COMPLETED' ? 'Marcar como pendente' : 'Marcar como concluída'}
         >
           {STATUS_ICONS[task.status]}
@@ -151,8 +151,8 @@ function TaskCard({
         )}
       </div>
 
-      {/* Ações — sempre visível no mobile, hover no desktop */}
-      <div className="absolute top-3 right-3 flex gap-1 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
+      {/* Ações — sempre visível com opacidade reduzida */}
+      <div className="absolute top-3 right-3 flex gap-1 opacity-70 transition-opacity hover:opacity-100">
         <button
           onClick={(e) => {
             e.stopPropagation()

@@ -143,7 +143,7 @@ export function TaskForm({ onSuccess, onCancel, initialData, onUpdate }: TaskFor
           <option value="">Sem categoria</option>
           {categories.map((cat) => (
             <option key={cat.id} value={cat.id}>
-              {cat.name}
+              {(cat.type === 'STUDY' ? '📖 ' : '💼 ') + cat.name}
             </option>
           ))}
         </Select>

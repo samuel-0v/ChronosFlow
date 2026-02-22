@@ -172,8 +172,17 @@ function TimerCard() {
       ? Math.min(100, (elapsedTime / pomodoroDuration) * 100)
       : 0
 
+  // Classe de glow para o card
+  const glowClass = isRunning
+    ? mode === 'pomodoro'
+      ? 'animate-glow-rose'
+      : 'animate-glow-blue'
+    : isPaused
+      ? 'animate-glow-amber'
+      : ''
+
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 lg:p-8">
+    <div className={`rounded-2xl border border-slate-800 bg-slate-900 p-6 lg:p-8 transition-shadow ${glowClass}`}>
       {/* Header */}
       <div className="mb-4 flex items-center gap-2 text-slate-400">
         <Clock className="h-4 w-4" />
@@ -428,10 +437,10 @@ function TaskItem({
     ?? (task.categories?.type ? CATEGORY_TYPE_LABELS[task.categories.type] : null)
 
   return (
-    <div className="group flex items-start gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-slate-800/50">
+    <div className="group flex items-start gap-3 rounded-lg px-3 py-4 transition-colors hover:bg-slate-800/50">
       <button
         onClick={toggleDone}
-        className="mt-0.5 shrink-0 p-1 text-slate-500 transition-colors hover:text-primary-400 active:text-primary-300"
+        className="mt-0.5 shrink-0 p-1.5 text-slate-500 transition-colors hover:text-primary-400 active:text-primary-300"
         title={done ? 'Marcar como pendente' : 'Marcar como concluída'}
       >
         {done ? (

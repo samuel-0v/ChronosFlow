@@ -27,3 +27,23 @@
   }
 }
 
+/* Timer breathing glow animations */
+@keyframes glow-blue {
+  0%, 100% { box-shadow: 0 0 8px 0 rgba(56, 189, 248, 0.15), inset 0 0 8px 0 rgba(56, 189, 248, 0.05); }
+  50% { box-shadow: 0 0 20px 4px rgba(56, 189, 248, 0.3), inset 0 0 12px 2px rgba(56, 189, 248, 0.1); }
+}
+
+@keyframes glow-rose {
+  0%, 100% { box-shadow: 0 0 8px 0 rgba(244, 63, 94, 0.15), inset 0 0 8px 0 rgba(244, 63, 94, 0.05); }
+  50% { box-shadow: 0 0 20px 4px rgba(244, 63, 94, 0.3), inset 0 0 12px 2px rgba(244, 63, 94, 0.1); }
+}
+
+@keyframes glow-amber {
+  0%, 100% { box-shadow: 0 0 8px 0 rgba(245, 158, 11, 0.15), inset 0 0 8px 0 rgba(245, 158, 11, 0.05); }
+  50% { box-shadow: 0 0 20px 4px rgba(245, 158, 11, 0.3), inset 0 0 12px 2px rgba(245, 158, 11, 0.1); }
+}
+
+.animate-glow-blue  { animation: glow-blue 3s ease-in-out infinite; }
+.animate-glow-rose  { animation: glow-rose 3s ease-in-out infinite; }
+.animate-glow-amber { animation: glow-amber 3s ease-in-out infinite; }
+
