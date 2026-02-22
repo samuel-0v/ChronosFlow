@@ -237,13 +237,6 @@ function SessionRow({
           )}
         </span>
 
-        {/* Horário */}
-        <span className="shrink-0 text-xs text-slate-400">
-          {formatHour(entry.start_time)}
-          {'-'}
-          {entry.end_time ? formatHour(entry.end_time) : 'em aberto'}
-        </span>
-
         {/* Categoria */}
         {entry.categories ? (
           <span className="flex items-center gap-1.5 text-xs">
@@ -264,7 +257,13 @@ function SessionRow({
 
         {/* Duração */}
         <span className="shrink-0 font-mono text-xs text-slate-300">
-          {entry.total_duration != null ? formatTime(entry.total_duration) : '—'}
+           {entry.total_duration != null ? formatTime(entry.total_duration) : (() => {
+            // Estimar duração: diferença entre start_time e agora
+            const start = new Date(entry.start_time).getTime();
+            const now = new Date().getTime();
+            const seconds = Math.floor((now - start) / 1000);
+            return `em aberto, ${formatTime(seconds)}`;
+           })()}
         </span>
 
         {/* Badge pausas */}
@@ -342,6 +341,18 @@ function SessionRow({
           expanded && !isEditing ? 'max-h-[500px] opacity-100 pb-3' : 'max-h-0 opacity-0'
         }`}
       >
+        <div className="flex items-center gap-3 rounded-lg bg-slate-800/40 px-3 py-1.5 text-[11px] mt-2">
+          <Clock className="h-3 w-3 shrink-0 text-slate-500" />
+            Início: <span className="font-mono text-slate-200">{formatHour(entry.start_time)}</span>
+            {entry.end_time && (
+              <>
+                
+                <span className="text-slate-700">    </span>
+                Fim: <span className="font-mono text-slate-200">{formatHour(entry.end_time)}</span>
+              </>
+            )}
+        </div>
+        {/* Horário */}
         <div className="border-t border-dashed border-slate-800 px-4 pt-2">
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
             Pausas
@@ -378,6 +389,7 @@ export function TimesheetList({
   const sortedDays = useMemo(
     () => Object.keys(localEntries).sort((a, b) => b.localeCompare(a)),
     [localEntries],
+
   )
 
   const selectedEntries = selectedDay ? localEntries[selectedDay] ?? [] : []
