@@ -4,7 +4,7 @@
 // Busca metas do perfil, totais semanais (WORK / STUDY)
 // e breakdown de hoje por categoria.
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { localMidnightISO } from '@/lib/formatTime'
@@ -76,8 +76,9 @@ export function useStats(): UseStatsReturn {
   const [todayByCategory, setTodayByCategory] = useState<CategoryBreakdown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [tick, setTick] = useState(0)
+  const hasFetched = useRef(false)
 
-  const refetch = () => setTick((t) => t + 1)
+  const refetch = useCallback(() => setTick((t) => t + 1), [])
 
   useEffect(() => {
     if (!user) {
@@ -85,7 +86,8 @@ export function useStats(): UseStatsReturn {
       return
     }
 
-    setIsLoading(true)
+    // Só mostra loading no primeiro fetch; depois faz refetch silencioso
+    if (!hasFetched.current) setIsLoading(true)
 
     const weekStart = getWeekStart().toISOString()
     const weekEnd = getWeekEnd().toISOString()
@@ -186,6 +188,7 @@ export function useStats(): UseStatsReturn {
         }
 
         setIsLoading(false)
+        hasFetched.current = true
       },
     )
   }, [user, tick])

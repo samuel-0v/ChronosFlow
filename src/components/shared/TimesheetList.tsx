@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Calendar,
   Clock,
@@ -20,7 +20,7 @@ interface TimesheetListProps {
   groupedEntries: GroupedEntries
   emptyLabel?: string
   emptyHint?: string
-  /** Chamado após edição bem-sucedida de end_time */
+  /** Chamado após edição bem-sucedida de end_time (refetch silencioso) */
   onEntryUpdated?: () => void
 }
 
@@ -103,9 +103,11 @@ function PauseAccordion({ pauses }: { pauses: Pause[] }) {
 function SessionRow({
   entry,
   onEntryUpdated,
+  onLocalUpdate,
 }: {
   entry: TimeEntryWithDetails
   onEntryUpdated?: () => void
+  onLocalUpdate?: (updated: TimeEntryWithDetails) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -206,6 +208,15 @@ function SessionRow({
 
     setIsEditing(false)
     setEditError(null)
+
+    // Atualizar localmente via callback
+    onLocalUpdate?.({
+      ...entry,
+      end_time: newEnd.toISOString(),
+      total_duration: Math.max(totalSeconds, 0),
+    })
+
+    // Refetch silencioso do parent (não causa flash)
     onEntryUpdated?.()
   }
 
@@ -229,7 +240,7 @@ function SessionRow({
         {/* Horário */}
         <span className="shrink-0 text-xs text-slate-400">
           {formatHour(entry.start_time)}
-          {' — '}
+          {'-'}
           {entry.end_time ? formatHour(entry.end_time) : 'em aberto'}
         </span>
 
@@ -243,7 +254,7 @@ function SessionRow({
             <span className="text-slate-300">{entry.categories.name}</span>
           </span>
         ) : (
-          <span className="text-xs text-slate-600">—</span>
+          <span className="text-xs text-slate-600"></span>
         )}
 
         {/* Tarefa */}
@@ -268,10 +279,10 @@ function SessionRow({
           <button
             type="button"
             onClick={handleStartEdit}
-            className="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-700 hover:text-slate-300 active:bg-slate-600"
+            className="shrink-0 flex h-9 w-3 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-700 hover:text-slate-300 active:bg-slate-600"
             title="Editar fim"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil className="h-4.5 w-4.5" />
           </button>
         )}
       </button>
@@ -352,11 +363,24 @@ export function TimesheetList({
 }: TimesheetListProps) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
-  const sortedDays = Object.keys(groupedEntries).sort(
-    (a, b) => b.localeCompare(a), // mais recente primeiro
+  // Estado local espelhado — permite edições otimistas sem flash
+  const [localEntries, setLocalEntries] = useState<GroupedEntries>(groupedEntries)
+  const prevEntriesRef = useRef(groupedEntries)
+
+  // Sincronizar com prop de forma silenciosa (merge do servidor)
+  useEffect(() => {
+    if (prevEntriesRef.current !== groupedEntries) {
+      prevEntriesRef.current = groupedEntries
+      setLocalEntries(groupedEntries)
+    }
+  }, [groupedEntries])
+
+  const sortedDays = useMemo(
+    () => Object.keys(localEntries).sort((a, b) => b.localeCompare(a)),
+    [localEntries],
   )
 
-  const selectedEntries = selectedDay ? groupedEntries[selectedDay] ?? [] : []
+  const selectedEntries = selectedDay ? localEntries[selectedDay] ?? [] : []
 
   if (sortedDays.length === 0) {
     return (
@@ -373,7 +397,7 @@ export function TimesheetList({
       {/* Lista de dias */}
       <div className="space-y-2">
         {sortedDays.map((day) => {
-          const entries = groupedEntries[day]
+          const entries = localEntries[day]
           const totalSeconds = sumDuration(entries)
 
           return (
@@ -422,7 +446,22 @@ export function TimesheetList({
 
           {/* Sessões */}
           {selectedEntries.map((entry) => (
-            <SessionRow key={entry.id} entry={entry} onEntryUpdated={onEntryUpdated} />
+            <SessionRow
+              key={entry.id}
+              entry={entry}
+              onEntryUpdated={onEntryUpdated}
+              onLocalUpdate={(updated) => {
+                setLocalEntries((prev) => {
+                  const result = { ...prev }
+                  for (const day of Object.keys(result)) {
+                    result[day] = result[day].map((e) =>
+                      e.id === updated.id ? updated : e,
+                    )
+                  }
+                  return result
+                })
+              }}
+            />
           ))}
         </div>
       </Modal>

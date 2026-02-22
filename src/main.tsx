@@ -5,7 +5,17 @@ import './index.css'
 import App from './App.tsx'
 
 // Registrar Service Worker para PWA
-registerSW({ immediate: true })
+// onNeedRefresh: não força reload automático — exibe apenas no console.
+// O usuário pode recarregar manualmente quando quiser a nova versão.
+registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    console.info('[SW] Nova versão disponível. Recarregue a página para atualizar.')
+  },
+  onOfflineReady() {
+    console.info('[SW] App pronto para uso offline.')
+  },
+})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

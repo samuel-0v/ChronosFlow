@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import {
   Play,
   Pause,
@@ -23,6 +23,7 @@ import { Modal, Select, Input, Label } from '@/components/ui'
 import { TaskForm } from '@/components/tasks'
 import { WeeklyGoalsCard, TodaySummaryCard } from '@/components/dashboard'
 import type { Task, Category, TaskStatus, SessionType } from '@/types'
+import { useProfile } from '@/hooks'
 
 // ----- Tipo auxiliar para task + categoria -----
 
@@ -39,6 +40,57 @@ const POMODORO_DURATIONS = [
 ]
 
 // ----- Componentes internos -----
+
+/**
+ * Stats rápidos do dia — componente memoizado para evitar re-render do TimerCard
+ * quando os dados de sessão mudam.
+ */
+const DailyStats = memo(function DailyStats({ timerStatus }: { timerStatus: string }) {
+  const { user } = useAuth()
+  const [workToday, setWorkToday] = useState(0)
+  const [studyToday, setStudyToday] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+
+    const todayISO = localMidnightISO()
+
+    supabase
+      .from('time_entries')
+      .select('session_type, total_duration')
+      .eq('user_id', user.id)
+      .gte('start_time', todayISO)
+      .not('total_duration', 'is', null)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[Dashboard] Erro ao buscar stats:', error.message)
+          return
+        }
+        const entries = (data ?? []) as Array<{ session_type: 'WORK' | 'STUDY'; total_duration: number | null }>
+        let work = 0
+        let study = 0
+        for (const entry of entries) {
+          if (entry.session_type === 'WORK') work += entry.total_duration ?? 0
+          else if (entry.session_type === 'STUDY') study += entry.total_duration ?? 0
+        }
+        setWorkToday(work)
+        setStudyToday(study)
+      })
+  }, [user, timerStatus])
+
+  return (
+    <div className="mt-8 grid grid-cols-2 gap-4 border-t border-slate-800 pt-6">
+      <div className="text-center">
+        <p className="text-2xl font-bold text-slate-100">{formatDuration(workToday)}</p>
+        <p className="mt-0.5 text-xs text-slate-500">Trabalhado hoje</p>
+      </div>
+      <div className="text-center">
+        <p className="text-2xl font-bold text-slate-100">{formatDuration(studyToday)}</p>
+        <p className="mt-0.5 text-xs text-slate-500">Estudado hoje</p>
+      </div>
+    </div>
+  )
+})
 
 function TimerCard() {
   const { user } = useAuth()
@@ -69,38 +121,6 @@ function TimerCard() {
   // Modal de pausa (substitui window.prompt)
   const [isPauseModalOpen, setIsPauseModalOpen] = useState(false)
   const [pauseReason, setPauseReason] = useState('')
-
-  // Stats do dia
-  const [workToday, setWorkToday] = useState(0)
-  const [studyToday, setStudyToday] = useState(0)
-
-  useEffect(() => {
-    if (!user) return
-
-    const todayISO = localMidnightISO()
-
-    supabase
-      .from('time_entries')
-      .select('session_type, total_duration')
-      .eq('user_id', user.id)
-      .gte('start_time', todayISO)
-      .not('total_duration', 'is', null)
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('[Dashboard] Erro ao buscar stats:', error.message)
-          return
-        }
-        const entries = (data ?? []) as Array<{ session_type: 'WORK' | 'STUDY'; total_duration: number | null }>
-        let work = 0
-        let study = 0
-        for (const entry of entries) {
-          if (entry.session_type === 'WORK') work += entry.total_duration ?? 0
-          else if (entry.session_type === 'STUDY') study += entry.total_duration ?? 0
-        }
-        setWorkToday(work)
-        setStudyToday(study)
-      })
-  }, [user, status])
 
   // Buscar tarefas pendentes da categoria selecionada
   useEffect(() => {
@@ -402,17 +422,8 @@ function TimerCard() {
         <div className="h-11 w-11" />
       </div>
 
-      {/* Stats rápidos */}
-      <div className="mt-8 grid grid-cols-2 gap-4 border-t border-slate-800 pt-6">
-        <div className="text-center">
-          <p className="text-2xl font-bold text-slate-100">{formatDuration(workToday)}</p>
-          <p className="mt-0.5 text-xs text-slate-500">Trabalhado hoje</p>
-        </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold text-slate-100">{formatDuration(studyToday)}</p>
-          <p className="mt-0.5 text-xs text-slate-500">Estudado hoje</p>
-        </div>
-      </div>
+      {/* Stats rápidos — componente isolado para evitar re-render do timer */}
+      <DailyStats timerStatus={status} />
     </div>
   )
 }
@@ -479,28 +490,32 @@ function TaskItem({
 function TasksCard() {
   const { user } = useAuth()
   const [tasks, setTasks] = useState<TaskWithCategory[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isFirstLoad, setIsFirstLoad] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const fetchTasks = useCallback(() => {
-    if (!user) return
-    setIsLoading(true)
+  // Refetch silencioso — nunca reseta `tasks` para [] nem mostra spinner após o 1º load
+  const fetchTasks = useCallback(
+    (silent = false) => {
+      if (!user) return
+      if (!silent) setIsFirstLoad(true)
 
-    supabase
-      .from('tasks')
-      .select('*, categories(name, type)')
-      .eq('user_id', user.id)
-      .in('status', ['PENDING', 'IN_PROGRESS'])
-      .order('priority', { ascending: true })
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('[Dashboard] Erro ao buscar tasks:', error.message)
-        }
-        setTasks((data as TaskWithCategory[]) ?? [])
-        setIsLoading(false)
-      })
-  }, [user])
+      supabase
+        .from('tasks')
+        .select('*, categories(name, type)')
+        .eq('user_id', user.id)
+        .in('status', ['PENDING', 'IN_PROGRESS'])
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: false })
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('[Dashboard] Erro ao buscar tasks:', error.message)
+          }
+          setTasks((data as TaskWithCategory[]) ?? [])
+          setIsFirstLoad(false)
+        })
+    },
+    [user],
+  )
 
   useEffect(() => {
     fetchTasks()
@@ -508,10 +523,21 @@ function TasksCard() {
 
   const handleTaskCreated = () => {
     setIsModalOpen(false)
-    fetchTasks()
+    fetchTasks(true) // silent refetch
   }
 
+  // Optimistic toggle — atualiza o estado local na hora, reverte se houver erro
   const handleToggleStatus = async (taskId: string, newStatus: TaskStatus) => {
+    // Snapshot para rollback
+    const previousTasks = tasks
+
+    // Atualização otimista: remove tasks concluídas ou reverte status
+    setTasks((prev) =>
+      newStatus === 'COMPLETED'
+        ? prev.filter((t) => t.id !== taskId)
+        : prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
+    )
+
     const { error } = await supabase
       .from('tasks')
       .update({ status: newStatus })
@@ -519,9 +545,13 @@ function TasksCard() {
 
     if (error) {
       console.error('[Dashboard] Erro ao atualizar status:', error.message)
+      // Reverter para o estado anterior
+      setTasks(previousTasks)
       return
     }
-    fetchTasks()
+
+    // Refetch silencioso para sincronizar com o servidor
+    fetchTasks(true)
   }
 
   return (
@@ -533,7 +563,7 @@ function TasksCard() {
           <span className="text-xs font-semibold tracking-widest uppercase">Tarefas Pendentes</span>
         </div>
         <div className="flex items-center gap-2">
-          {!isLoading && tasks.length > 0 && (
+          {tasks.length > 0 && (
             <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-400">
               {tasks.length}
             </span>
@@ -554,7 +584,7 @@ function TasksCard() {
       </Modal>
 
       {/* Conteúdo */}
-      {isLoading ? (
+      {isFirstLoad && tasks.length === 0 ? (
         <div className="flex items-center justify-center py-10">
           <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
         </div>
@@ -579,7 +609,7 @@ function TasksCard() {
 
 function getGreeting(): string {
   const hour = new Date().getHours()
-  if (hour < 5) return 'Boa madrugada'
+  if (hour < 5) return 'Oii, hora de ir dormir'
   if (hour < 12) return 'Bom dia'
   if (hour < 18) return 'Boa tarde'
   return 'Boa noite'
@@ -598,9 +628,10 @@ function getFormattedDate(): string {
 
 export function Dashboard() {
   const { user } = useAuth()
+  const { profile } = useProfile()
   const { status } = useTimerContext()
   const stats = useStats()
-  const displayName = user?.user_metadata?.full_name ?? 'Usuário'
+  const displayName = profile?.full_name ?? user?.user_metadata?.full_name ?? 'Usuário'
 
   // Refetch stats quando o timer para (sessão gravada)
   useEffect(() => {

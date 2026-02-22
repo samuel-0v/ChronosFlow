@@ -46,7 +46,8 @@ export function useTasks(): UseTasksReturn {
       return
     }
 
-    setIsLoading(true)
+    // Só mostra loading na carga inicial (sem dados)
+    if (tasks.length === 0) setIsLoading(true)
 
     supabase
       .from('tasks')

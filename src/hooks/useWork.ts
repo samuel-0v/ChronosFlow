@@ -65,7 +65,8 @@ export function useWork(): UseWorkReturn {
       return
     }
 
-    setIsLoadingTasks(true)
+    // Só mostra loading na carga inicial (sem dados)
+    if (tasks.length === 0) setIsLoadingTasks(true)
 
     const today = getLocalISODate()
 
@@ -93,7 +94,8 @@ export function useWork(): UseWorkReturn {
       return
     }
 
-    setIsLoadingEntries(true)
+    // Só mostra loading na carga inicial (sem dados)
+    if (timeEntries.length === 0) setIsLoadingEntries(true)
 
     supabase
       .from('time_entries')

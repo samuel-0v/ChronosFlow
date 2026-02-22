@@ -63,7 +63,7 @@ export function useStudy(): UseStudyReturn {
       return
     }
 
-    setIsLoadingNotes(true)
+    if (notes.length === 0) setIsLoadingNotes(true)
 
     supabase
       .from('study_notes')
@@ -88,7 +88,7 @@ export function useStudy(): UseStudyReturn {
       return
     }
 
-    setIsLoadingFlashcards(true)
+    if (flashcards.length === 0) setIsLoadingFlashcards(true)
 
     supabase
       .from('flashcards')
@@ -113,7 +113,7 @@ export function useStudy(): UseStudyReturn {
       return
     }
 
-    setIsLoadingStudyEntries(true)
+    if (studyEntries.length === 0) setIsLoadingStudyEntries(true)
 
     supabase
       .from('time_entries')
