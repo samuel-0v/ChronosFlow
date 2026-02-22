@@ -172,7 +172,7 @@ export function TaskForm({ onSuccess, onCancel, initialData, onUpdate }: TaskFor
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          min={isEditMode ? undefined : getLocalISODate()}
+          min={isEditMode ? undefined : new Date().toISOString().split('T')[0]}
         />
       </div>
 

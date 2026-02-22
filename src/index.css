@@ -24,6 +24,26 @@
 @layer base {
   body {
     @apply bg-surface text-slate-100 antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  /* Comportamento nativo em botões e nav */
+  button,
+  a,
+  nav,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  /* Inputs mantêm seleção de texto */
+  input,
+  textarea,
+  select,
+  [contenteditable] {
+    user-select: text;
   }
 }
 
