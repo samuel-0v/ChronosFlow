@@ -237,18 +237,12 @@ function SessionRow({
           )}
         </span>
 
-        {/* Categoria */}
-        {entry.categories ? (
-          <span className="flex items-center gap-1.5 text-xs">
-            <span
-              className="inline-block h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: entry.categories.color_hex }}
-            />
-            <span className="text-slate-300">{entry.categories.name}</span>
-          </span>
-        ) : (
-          <span className="text-xs text-slate-600"></span>
-        )}
+        {/* Horário */}
+        <span className="shrink-0 text-xs text-slate-400">
+          {formatHour(entry.start_time)}
+          {'-'}
+          {entry.end_time ? formatHour(entry.end_time) : 'em aberto'}
+        </span>
 
         {/* Tarefa */}
         <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
@@ -257,13 +251,7 @@ function SessionRow({
 
         {/* Duração */}
         <span className="shrink-0 font-mono text-xs text-slate-300">
-           {entry.total_duration != null ? formatTime(entry.total_duration) : (() => {
-            // Estimar duração: diferença entre start_time e agora
-            const start = new Date(entry.start_time).getTime();
-            const now = new Date().getTime();
-            const seconds = Math.floor((now - start) / 1000);
-            return `em aberto, ${formatTime(seconds)}`;
-           })()}
+          {entry.total_duration != null ? formatTime(entry.total_duration) : '—'}
         </span>
 
         {/* Badge pausas */}
@@ -284,6 +272,8 @@ function SessionRow({
             <Pencil className="h-4.5 w-4.5" />
           </button>
         )}
+
+        
       </button>
 
       {/* Painel de edição expandido */}
@@ -341,23 +331,52 @@ function SessionRow({
           expanded && !isEditing ? 'max-h-[500px] opacity-100 pb-3' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="flex items-center gap-3 rounded-lg bg-slate-800/40 px-3 py-1.5 text-[11px] mt-2">
-          <Clock className="h-3 w-3 shrink-0 text-slate-500" />
-            Início: <span className="font-mono text-slate-200">{formatHour(entry.start_time)}</span>
-            {entry.end_time && (
-              <>
+        <div className="border-t border-dashed border-slate-800 px-4 pt-4 pb-2">
+        {/* Header Detalhes */}
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+            Detalhes
+        </p>
+
+        {/* Linha Única: Categoria e Tarefa */}
+        <div className="flex items-center gap-2 overflow-hidden py-1">
+            {/* Bloco da Categoria */}
+            {entry.categories ? (
+            <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-slate-800/40 px-2 py-0.5 border border-slate-700/50">
                 
-                <span className="text-slate-700">    </span>
-                Fim: <span className="font-mono text-slate-200">{formatHour(entry.end_time)}</span>
-              </>
+                <span
+                className="h-1.5 w-1.5 rounded-full shadow-[0_0_5px]"
+                style={{ 
+                    backgroundColor: entry.categories.color_hex,
+                    boxShadow: `0 0 5px ${entry.categories.color_hex}` 
+                }}
+                />
+                <span className="text-[11px] font-medium text-slate-300">
+                {entry.categories.name}
+                </span>
+            </div>
+            ) : (
+            <span className="text-[11px] text-slate-600 italic">Geral</span>
             )}
+
+            {/* Divisor Visual */}
+            <span className="text-slate-700 font-bold">•</span>
+
+            {/* Bloco da Tarefa */}
+            <div className="flex-1 min-w-0 overflow-hidden">
+            <p className="truncate text-xs text-slate-400">
+                <span className="text-[10px] text-slate-600 mr-1 uppercase"></span>
+                {entry.tasks ? entry.tasks.title : 'Sem tarefa'}
+            </p>
+            </div>
         </div>
-        {/* Horário */}
-        <div className="border-t border-dashed border-slate-800 px-4 pt-2">
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+
+        {/* Seção de Pausas */}
+        <div className="mt-4">
+            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-600">
             Pausas
-          </p>
-          <PauseAccordion pauses={entry.pauses} />
+            </p>
+            <PauseAccordion pauses={entry.pauses} />
+        </div>
         </div>
       </div>
     </div>
@@ -389,7 +408,6 @@ export function TimesheetList({
   const sortedDays = useMemo(
     () => Object.keys(localEntries).sort((a, b) => b.localeCompare(a)),
     [localEntries],
-
   )
 
   const selectedEntries = selectedDay ? localEntries[selectedDay] ?? [] : []
