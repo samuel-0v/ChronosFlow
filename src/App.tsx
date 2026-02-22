@@ -9,6 +9,7 @@ import { Work } from '@/pages/Work'
 import { Study } from '@/pages/Study'
 import { SettingsPage } from '@/pages/Settings'
 import { Profile } from '@/pages/Profile'
+import { Tasks } from '@/pages/Tasks'
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="work" element={<Work />} />
               <Route path="study" element={<Study />} />
+              <Route path="tasks" element={<Tasks />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="profile" element={<Profile />} />
             </Route>

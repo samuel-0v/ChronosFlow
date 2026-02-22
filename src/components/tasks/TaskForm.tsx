@@ -1,4 +1,5 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
+import { Clock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCategories } from '@/hooks/useCategories'
@@ -7,18 +8,24 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Label } from '@/components/ui/Label'
-import type { TaskPriority } from '@/types'
+import type { Task, TaskPriority, TaskUpdate } from '@/types'
 
 interface TaskFormProps {
-  /** Callback chamado após inserção bem-sucedida */
+  /** Callback chamado após inserção/atualização bem-sucedida */
   onSuccess: () => void
   /** Callback para cancelar / fechar */
   onCancel?: () => void
+  /** Se fornecido, ativa o modo edição */
+  initialData?: Task
+  /** Função de update externa (do useTasks) — usada no modo edição */
+  onUpdate?: (taskId: string, data: TaskUpdate) => Promise<boolean>
 }
 
-export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
+export function TaskForm({ onSuccess, onCancel, initialData, onUpdate }: TaskFormProps) {
   const { user } = useAuth()
   const { categories, isLoading: categoriesLoading } = useCategories()
+
+  const isEditMode = Boolean(initialData)
 
   // Estado do formulário
   const [title, setTitle] = useState('')
@@ -30,6 +37,16 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
   // Estado de submissão
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Popular campos no modo edição
+  useEffect(() => {
+    if (!initialData) return
+    setTitle(initialData.title)
+    setCategoryId(initialData.category_id ?? '')
+    setPriority(initialData.priority)
+    setDueDate(initialData.due_date ?? '')
+    setEstimatedTime(initialData.estimated_time ? String(initialData.estimated_time) : '')
+  }, [initialData])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -47,6 +64,28 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
 
     setIsSubmitting(true)
 
+    // ----- Modo edição -----
+    if (isEditMode && initialData && onUpdate) {
+      const success = await onUpdate(initialData.id, {
+        title: title.trim(),
+        category_id: categoryId || null,
+        priority,
+        due_date: dueDate || null,
+        estimated_time: estimatedTime ? Number(estimatedTime) : null,
+      })
+
+      setIsSubmitting(false)
+
+      if (!success) {
+        setError('Erro ao salvar alterações. Tente novamente.')
+        return
+      }
+
+      onSuccess()
+      return
+    }
+
+    // ----- Modo criação -----
     const { error: insertError } = await supabase
       .from('tasks')
       .insert([
@@ -133,13 +172,17 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          min={getLocalISODate()}
+          min={isEditMode ? undefined : getLocalISODate()}
         />
       </div>
 
       {/* Tempo estimado */}
       <div className="space-y-1.5">
-        <Label htmlFor="task-estimated-time">Tempo estimado (minutos)</Label>
+        <Label htmlFor="task-estimated-time" className="flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5 text-slate-400" />
+          Tempo estimado
+          <span className="text-[10px] font-normal text-slate-600">(minutos)</span>
+        </Label>
         <Input
           id="task-estimated-time"
           type="number"
@@ -163,7 +206,7 @@ export function TaskForm({ onSuccess, onCancel }: TaskFormProps) {
           </Button>
         )}
         <Button type="submit" isLoading={isSubmitting}>
-          Criar Tarefa
+          {isEditMode ? 'Salvar Alterações' : 'Criar Tarefa'}
         </Button>
       </div>
     </form>
