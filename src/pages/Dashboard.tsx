@@ -15,10 +15,12 @@ import {
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTimerContext } from '@/contexts/TimerContext'
+import { useStats } from '@/hooks/useStats'
 import { formatTime, formatDuration } from '@/lib/formatTime'
 import { PRIORITY_COLORS, PRIORITY_LABELS, CATEGORY_TYPE_LABELS } from '@/lib/constants'
 import { Modal } from '@/components/ui'
 import { TaskForm } from '@/components/tasks'
+import { WeeklyGoalsCard, TodaySummaryCard } from '@/components/dashboard'
 import type { Task, Category, TaskStatus } from '@/types'
 
 // ----- Tipo auxiliar para task + categoria -----
@@ -435,7 +437,17 @@ function getFormattedDate(): string {
 
 export function Dashboard() {
   const { user } = useAuth()
+  const { status } = useTimerContext()
+  const stats = useStats()
   const displayName = user?.user_metadata?.full_name ?? 'Usuário'
+
+  // Refetch stats quando o timer para (sessão gravada)
+  useEffect(() => {
+    if (status === 'idle') {
+      stats.refetch()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status])
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -449,12 +461,29 @@ export function Dashboard() {
         </p>
       </div>
 
-      {/* Grid principal */}
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3">
+      {/* Grid principal — 2 colunas no desktop */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Coluna esquerda: Timer + Metas */}
+        <div className="space-y-6">
           <TimerCard />
+          <WeeklyGoalsCard
+            workGoalHours={stats.workGoalHours}
+            studyGoalHours={stats.studyGoalHours}
+            weekWorkSeconds={stats.weekWorkSeconds}
+            weekStudySeconds={stats.weekStudySeconds}
+            workPercent={stats.workPercent}
+            studyPercent={stats.studyPercent}
+            isLoading={stats.isLoading}
+          />
         </div>
-        <div className="lg:col-span-2">
+
+        {/* Coluna direita: Resumo do dia + Tarefas */}
+        <div className="space-y-6">
+          <TodaySummaryCard
+            todayTotalSeconds={stats.todayTotalSeconds}
+            todayByCategory={stats.todayByCategory}
+            isLoading={stats.isLoading}
+          />
           <TasksCard />
         </div>
       </div>
