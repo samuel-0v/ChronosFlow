@@ -73,15 +73,15 @@ function TaskCard({
 
   return (
     <div
-      className={`group relative flex flex-col rounded-2xl border bg-slate-900 transition-colors hover:border-slate-700 ${
+      className={`group flex flex-col rounded-2xl border bg-slate-900 transition-colors hover:border-slate-700 ${
         overdue ? 'border-red-500/30' : 'border-slate-800'
       }`}
     >
       {/* Cabeçalho */}
-      <div className="flex items-start gap-3 px-5 pt-5 pb-3">
+      <div className="flex items-start gap-2 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
         <button
           onClick={() => onToggle(task)}
-          className="mt-0.5 shrink-0 p-1.5 transition-colors hover:text-primary-400 active:text-primary-300"
+          className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-slate-800 hover:text-primary-400 active:bg-slate-700 active:text-primary-300"
           title={task.status === 'COMPLETED' ? 'Marcar como pendente' : 'Marcar como concluída'}
         >
           {STATUS_ICONS[task.status]}
@@ -113,12 +113,29 @@ function TaskCard({
           )}
         </div>
 
-        {/* Prioridade badge */}
-        <span
-          className={`shrink-0 text-[10px] font-bold uppercase tracking-wider ${PRIORITY_COLORS[task.priority]}`}
-        >
-          {PRIORITY_LABELS[task.priority]}
-        </span>
+        {/* Ações — sempre visíveis */}
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit(task)
+            }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300 active:bg-slate-700"
+            title="Editar"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(task)
+            }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20"
+            title="Excluir"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Métricas */}
@@ -149,30 +166,13 @@ function TaskCard({
             {task.estimated_time} min
           </span>
         )}
-      </div>
 
-      {/* Ações — sempre visível com opacidade reduzida */}
-      <div className="absolute top-3 right-3 flex gap-1 opacity-70 transition-opacity hover:opacity-100">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onEdit(task)
-          }}
-          className="shrink-0 rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300 active:bg-slate-700"
-          title="Editar"
+        {/* Prioridade */}
+        <span
+          className={`ml-auto text-[10px] font-bold uppercase tracking-wider ${PRIORITY_COLORS[task.priority]}`}
         >
-          <Pencil className="h-4 w-4" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete(task)
-          }}
-          className="shrink-0 rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20"
-          title="Excluir"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+          {PRIORITY_LABELS[task.priority]}
+        </span>
       </div>
     </div>
   )

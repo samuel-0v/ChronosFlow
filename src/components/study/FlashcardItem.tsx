@@ -62,7 +62,7 @@ export function FlashcardItem({ flashcard, onDeleted, onReview }: FlashcardItemP
           <button
             onClick={handleDelete}
             disabled={isDeleting}
-            className="shrink-0 rounded-lg p-2 text-slate-600 opacity-70 transition-all hover:bg-red-500/10 hover:text-red-400 hover:opacity-100 active:bg-red-500/20 disabled:opacity-50"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20 disabled:opacity-50"
             title="Excluir"
           >
             <Trash2 className="h-4 w-4" />
@@ -84,7 +84,7 @@ export function FlashcardItem({ flashcard, onDeleted, onReview }: FlashcardItemP
             </div>
 
             {/* Grade buttons — SM-2 */}
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
+            <div className="mt-4 flex flex-wrap justify-center gap-2 sm:gap-3">
               {([
                 { grade: 0, label: 'Errei', color: 'bg-red-500/15 text-red-400 hover:bg-red-500/25 active:bg-red-500/35' },
                 { grade: 1, label: 'Difícil', color: 'bg-orange-500/15 text-orange-400 hover:bg-orange-500/25 active:bg-orange-500/35' },
@@ -100,7 +100,7 @@ export function FlashcardItem({ flashcard, onDeleted, onReview }: FlashcardItemP
                     setRevealed(false)
                     setIsGrading(false)
                   }}
-                  className={`min-w-[4.5rem] rounded-lg py-3 px-4 text-xs font-semibold transition-colors disabled:opacity-50 ${color}`}
+                  className={`flex-1 basis-[calc(50%-0.5rem)] rounded-xl py-3 px-4 text-sm font-semibold transition-colors disabled:opacity-50 sm:basis-auto sm:min-w-[5rem] ${color}`}
                 >
                   {isGrading ? (
                     <Loader2 className="mx-auto h-4 w-4 animate-spin" />

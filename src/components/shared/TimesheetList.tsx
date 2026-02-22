@@ -247,7 +247,7 @@ function SessionRow({
                 type="button"
                 onClick={handleSaveEdit}
                 disabled={isSaving}
-                className="shrink-0 rounded-lg p-1.5 text-emerald-400 hover:bg-emerald-500/10 active:bg-emerald-500/20 disabled:opacity-50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-emerald-400 hover:bg-emerald-500/10 active:bg-emerald-500/20 disabled:opacity-50"
                 title="Salvar"
               >
                 <Check className="h-4 w-4" />
@@ -255,7 +255,7 @@ function SessionRow({
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-700 active:bg-slate-600"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-700 active:bg-slate-600"
                 title="Cancelar"
               >
                 <XIcon className="h-4 w-4" />
@@ -268,7 +268,7 @@ function SessionRow({
                 <button
                   type="button"
                   onClick={handleStartEdit}
-                  className="ml-1 inline-flex shrink-0 rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-slate-700 hover:text-slate-300 active:bg-slate-600"
+                  className="ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-700 hover:text-slate-300 active:bg-slate-600"
                   title="Editar fim"
                 >
                   <Pencil className="h-3.5 w-3.5" />
