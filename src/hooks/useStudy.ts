@@ -23,8 +23,10 @@ interface UseStudyReturn {
   flashcards: FlashcardWithCategory[]
   isLoadingNotes: boolean
   isLoadingFlashcards: boolean
+  isReviewing: boolean
   refetchNotes: () => void
   refetchFlashcards: () => void
+  reviewFlashcard: (cardId: string, grade: number) => Promise<void>
 }
 
 // ----- Hook -----
@@ -36,6 +38,7 @@ export function useStudy(): UseStudyReturn {
   const [flashcards, setFlashcards] = useState<FlashcardWithCategory[]>([])
   const [isLoadingNotes, setIsLoadingNotes] = useState(true)
   const [isLoadingFlashcards, setIsLoadingFlashcards] = useState(true)
+  const [isReviewing, setIsReviewing] = useState(false)
   const [notesTick, setNotesTick] = useState(0)
   const [flashcardsTick, setFlashcardsTick] = useState(0)
 
@@ -92,12 +95,60 @@ export function useStudy(): UseStudyReturn {
       })
   }, [user, flashcardsTick])
 
+  // ----- SM-2 Spaced Repetition -----
+  const reviewFlashcard = async (cardId: string, grade: number) => {
+    const card = flashcards.find((fc) => fc.id === cardId)
+    if (!card) return
+
+    setIsReviewing(true)
+
+    const oldInterval = card.interval_days
+    const oldEase = card.ease_factor
+
+    let newInterval: number
+    let newEase: number
+
+    if (grade === 0) {
+      // Errou — reinicia intervalo
+      newInterval = 1
+      newEase = Math.max(1.3, oldEase - 0.2)
+    } else {
+      // Ajuste do ease_factor pelo SM-2
+      newEase = Math.max(
+        1.3,
+        oldEase + (0.1 - (3 - grade) * (0.08 + (3 - grade) * 0.02)),
+      )
+      newInterval = oldInterval === 0 ? 1 : Math.round(oldInterval * newEase)
+    }
+
+    const nextReview = new Date()
+    nextReview.setDate(nextReview.getDate() + newInterval)
+
+    const { error } = await supabase
+      .from('flashcards')
+      .update({
+        interval_days: newInterval,
+        ease_factor: newEase,
+        next_review: nextReview.toISOString(),
+      })
+      .eq('id', cardId)
+
+    if (error) {
+      console.error('[useStudy] Erro ao revisar flashcard:', error.message)
+    }
+
+    setIsReviewing(false)
+    refetchFlashcards()
+  }
+
   return {
     notes,
     flashcards,
     isLoadingNotes,
     isLoadingFlashcards,
+    isReviewing,
     refetchNotes,
     refetchFlashcards,
+    reviewFlashcard,
   }
 }

@@ -17,6 +17,7 @@ export function Study() {
     isLoadingFlashcards,
     refetchNotes,
     refetchFlashcards,
+    reviewFlashcard,
   } = useStudy()
 
   const [isFlashcardModalOpen, setIsFlashcardModalOpen] = useState(false)
@@ -130,6 +131,7 @@ export function Study() {
                     key={fc.id}
                     flashcard={fc}
                     onDeleted={refetchFlashcards}
+                    onReview={reviewFlashcard}
                   />
                 ))}
               </div>

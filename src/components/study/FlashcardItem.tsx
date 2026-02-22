@@ -1,16 +1,18 @@
 import { useState } from 'react'
-import { Eye, EyeOff, Trash2, RotateCcw } from 'lucide-react'
+import { Eye, Trash2, RotateCcw, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { FlashcardWithCategory } from '@/hooks/useStudy'
 
 interface FlashcardItemProps {
   flashcard: FlashcardWithCategory
   onDeleted: () => void
+  onReview: (cardId: string, grade: number) => Promise<void>
 }
 
-export function FlashcardItem({ flashcard, onDeleted }: FlashcardItemProps) {
+export function FlashcardItem({ flashcard, onDeleted, onReview }: FlashcardItemProps) {
   const [revealed, setRevealed] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isGrading, setIsGrading] = useState(false)
 
   const handleDelete = async () => {
     if (!window.confirm('Excluir este flashcard?')) return
@@ -72,7 +74,7 @@ export function FlashcardItem({ flashcard, onDeleted }: FlashcardItemProps) {
           {flashcard.front_question}
         </p>
 
-        {/* Revelar / Resposta */}
+        {/* Revelar / Resposta + Avaliação */}
         {revealed ? (
           <div className="mt-3">
             <div className="border-t border-dashed border-slate-700 pt-3">
@@ -80,13 +82,34 @@ export function FlashcardItem({ flashcard, onDeleted }: FlashcardItemProps) {
                 {flashcard.back_answer}
               </p>
             </div>
-            <button
-              onClick={() => setRevealed(false)}
-              className="mt-2 flex items-center gap-1 text-[11px] font-medium text-slate-500 transition-colors hover:text-slate-300"
-            >
-              <EyeOff className="h-3 w-3" />
-              Ocultar
-            </button>
+
+            {/* Grade buttons — SM-2 */}
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              {([
+                { grade: 0, label: 'Errei', color: 'bg-red-500/15 text-red-400 hover:bg-red-500/25' },
+                { grade: 1, label: 'Difícil', color: 'bg-orange-500/15 text-orange-400 hover:bg-orange-500/25' },
+                { grade: 2, label: 'Bom', color: 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' },
+                { grade: 3, label: 'Fácil', color: 'bg-blue-500/15 text-blue-400 hover:bg-blue-500/25' },
+              ] as const).map(({ grade, label, color }) => (
+                <button
+                  key={grade}
+                  disabled={isGrading}
+                  onClick={async () => {
+                    setIsGrading(true)
+                    await onReview(flashcard.id, grade)
+                    setRevealed(false)
+                    setIsGrading(false)
+                  }}
+                  className={`rounded-lg px-2 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${color}`}
+                >
+                  {isGrading ? (
+                    <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    label
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <button
