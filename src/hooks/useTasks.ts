@@ -23,6 +23,7 @@ interface UseTasksReturn {
   createTask: (data: Omit<TaskInsert, 'user_id'>) => Promise<boolean>
   updateTask: (taskId: string, data: TaskUpdate) => Promise<boolean>
   deleteTask: (taskId: string) => Promise<boolean>
+  toggleTaskStatus: (task: Task) => Promise<boolean>
 }
 
 // ----- Hook -----
@@ -132,6 +133,15 @@ export function useTasks(): UseTasksReturn {
     [user, refetch],
   )
 
+  // ----- Toggle Status -----
+  const toggleTaskStatus = useCallback(
+    async (task: Task): Promise<boolean> => {
+      const newStatus = task.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED'
+      return updateTask(task.id, { status: newStatus })
+    },
+    [updateTask],
+  )
+
   return {
     tasks,
     isLoading,
@@ -140,5 +150,6 @@ export function useTasks(): UseTasksReturn {
     createTask,
     updateTask,
     deleteTask,
+    toggleTaskStatus,
   }
 }

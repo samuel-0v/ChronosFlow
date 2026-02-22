@@ -62,10 +62,12 @@ function TaskCard({
   task,
   onEdit,
   onDelete,
+  onToggle,
 }: {
   task: TaskWithCategory
   onEdit: (task: Task) => void
   onDelete: (task: TaskWithCategory) => void
+  onToggle: (task: TaskWithCategory) => void
 }) {
   const overdue = isOverdue(task.due_date, task.status)
 
@@ -77,7 +79,13 @@ function TaskCard({
     >
       {/* Cabeçalho */}
       <div className="flex items-start gap-3 px-5 pt-5 pb-3">
-        <span className="mt-0.5 shrink-0">{STATUS_ICONS[task.status]}</span>
+        <button
+          onClick={() => onToggle(task)}
+          className="mt-0.5 shrink-0 p-0.5 transition-colors hover:text-primary-400"
+          title={task.status === 'COMPLETED' ? 'Marcar como pendente' : 'Marcar como concluída'}
+        >
+          {STATUS_ICONS[task.status]}
+        </button>
         <div className="min-w-0 flex-1">
           <p
             className={`text-sm font-semibold leading-snug ${
@@ -143,21 +151,27 @@ function TaskCard({
         )}
       </div>
 
-      {/* Ações no hover */}
-      <div className="absolute top-3 right-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      {/* Ações — sempre visível no mobile, hover no desktop */}
+      <div className="absolute top-3 right-3 flex gap-1 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
         <button
-          onClick={() => onEdit(task)}
-          className="rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-slate-800 hover:text-slate-300"
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit(task)
+          }}
+          className="shrink-0 rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300 active:bg-slate-700"
           title="Editar"
         >
-          <Pencil className="h-3.5 w-3.5" />
+          <Pencil className="h-4 w-4" />
         </button>
         <button
-          onClick={() => onDelete(task)}
-          className="rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-red-500/10 hover:text-red-400"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete(task)
+          }}
+          className="shrink-0 rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20"
           title="Excluir"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 className="h-4 w-4" />
         </button>
       </div>
     </div>
@@ -167,7 +181,7 @@ function TaskCard({
 // ----- Página -----
 
 export function Tasks() {
-  const { tasks, isLoading, refetch, updateTask, deleteTask } = useTasks()
+  const { tasks, isLoading, refetch, updateTask, deleteTask, toggleTaskStatus } = useTasks()
 
   const [filter, setFilter] = useState<FilterKey>('ALL')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -305,6 +319,7 @@ export function Tasks() {
               task={task}
               onEdit={setEditingTask}
               onDelete={handleDelete}
+              onToggle={toggleTaskStatus}
             />
           ))}
         </div>

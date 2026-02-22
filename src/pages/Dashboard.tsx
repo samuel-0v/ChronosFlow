@@ -364,7 +364,7 @@ function TimerCard() {
         <button
           onClick={handleStop}
           disabled={isIdle}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 text-slate-400 transition-colors hover:border-red-500/50 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-700 text-slate-400 transition-colors hover:border-red-500/50 hover:text-red-400 active:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-30"
           title="Parar"
         >
           <Square className="h-4 w-4" />
@@ -390,7 +390,7 @@ function TimerCard() {
         </button>
 
         {/* Espaço reservado para manter simetria */}
-        <div className="h-10 w-10" />
+        <div className="h-11 w-11" />
       </div>
 
       {/* Stats rápidos */}
@@ -410,21 +410,18 @@ function TimerCard() {
 
 // ----- Task Item -----
 
-function TaskItem({ task }: { task: TaskWithCategory }) {
-  const [done, setDone] = useState(task.status === 'COMPLETED')
+function TaskItem({
+  task,
+  onToggle,
+}: {
+  task: TaskWithCategory
+  onToggle: (taskId: string, newStatus: TaskStatus) => Promise<void>
+}) {
+  const done = task.status === 'COMPLETED'
 
-  const toggleDone = async () => {
+  const toggleDone = () => {
     const newStatus: TaskStatus = done ? 'PENDING' : 'COMPLETED'
-    const { error } = await supabase
-      .from('tasks')
-      .update({ status: newStatus })
-      .eq('id', task.id)
-
-    if (error) {
-      console.error('[Dashboard] Erro ao atualizar task:', error.message)
-      return
-    }
-    setDone(!done)
+    void onToggle(task.id, newStatus)
   }
 
   const categoryLabel = task.categories?.name
@@ -434,7 +431,8 @@ function TaskItem({ task }: { task: TaskWithCategory }) {
     <div className="group flex items-start gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-slate-800/50">
       <button
         onClick={toggleDone}
-        className="mt-0.5 shrink-0 text-slate-500 transition-colors hover:text-primary-400"
+        className="mt-0.5 shrink-0 p-1 text-slate-500 transition-colors hover:text-primary-400 active:text-primary-300"
+        title={done ? 'Marcar como pendente' : 'Marcar como concluída'}
       >
         {done ? (
           <CheckCircle2 className="h-5 w-5 text-emerald-500" />
@@ -504,6 +502,19 @@ function TasksCard() {
     fetchTasks()
   }
 
+  const handleToggleStatus = async (taskId: string, newStatus: TaskStatus) => {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ status: newStatus })
+      .eq('id', taskId)
+
+    if (error) {
+      console.error('[Dashboard] Erro ao atualizar status:', error.message)
+      return
+    }
+    fetchTasks()
+  }
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
       {/* Header */}
@@ -520,7 +531,7 @@ function TasksCard() {
           )}
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-1 rounded-lg bg-primary-600/15 px-2.5 py-1 text-xs font-medium text-primary-400 transition-colors hover:bg-primary-600/25"
+            className="flex items-center gap-1 rounded-lg bg-primary-600/15 px-3 py-1.5 text-xs font-medium text-primary-400 transition-colors hover:bg-primary-600/25 active:bg-primary-600/35"
           >
             <Plus className="h-3.5 w-3.5" />
             Nova Tarefa
@@ -547,7 +558,7 @@ function TasksCard() {
       ) : (
         <div className="divide-y divide-slate-800/50">
           {tasks.map((task) => (
-            <TaskItem key={task.id} task={task} />
+            <TaskItem key={task.id} task={task} onToggle={handleToggleStatus} />
           ))}
         </div>
       )}

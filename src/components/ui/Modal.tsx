@@ -53,7 +53,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl animate-in fade-in zoom-in-95 duration-200"
       >
         {/* Header */}
         {title && (
@@ -61,7 +61,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
             <h2 className="text-lg font-semibold text-slate-100">{title}</h2>
             <button
               onClick={onClose}
-              className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
+              className="shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200 active:bg-slate-700"
             >
               <X className="h-5 w-5" />
             </button>
