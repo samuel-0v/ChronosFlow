@@ -19,8 +19,8 @@ import {
 } from 'lucide-react'
 import { useFinance } from '@/hooks/useFinance'
 import { Modal, Button } from '@/components/ui'
-import { TransactionForm } from '@/components/finance'
-import type { TransactionWithDetails } from '@/types/finance'
+import { TransactionForm, AccountForm, FinanceCategoryForm } from '@/components/finance'
+import type { TransactionWithDetails, NewTransactionPayload } from '@/types/finance'
 
 // ===================== Helpers =====================
 
@@ -265,6 +265,8 @@ export function Finance() {
   const { accounts, categories, bills, transactions } = useFinance()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
   const [txFilter, setTxFilter] = useState<TxFilterKey>('ALL')
 
   // --- Dados derivados ---
@@ -328,10 +330,20 @@ export function Finance() {
             Gerencie receitas, despesas e cartões de crédito.
           </p>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          Nova Movimentação
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsCategoryModalOpen(true)}>
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Categoria
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsAccountModalOpen(true)}>
+            <Landmark className="mr-1 h-3.5 w-3.5" />
+            Nova Conta
+          </Button>
+          <Button onClick={() => setIsCreateOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Nova Movimentação
+          </Button>
+        </div>
       </div>
 
       {/* ========== Summary Cards ========== */}
@@ -485,8 +497,44 @@ export function Finance() {
           accounts={accounts.accounts}
           categories={categories.categories}
           isSubmitting={transactions.isSubmitting}
-          onSubmit={transactions.createTransaction}
+          onSubmit={async (payload: NewTransactionPayload) => {
+            const ok = await transactions.createTransaction(payload)
+            if (ok) setIsCreateOpen(false)
+            return ok
+          }}
           onCancel={() => setIsCreateOpen(false)}
+        />
+      </Modal>
+
+      {/* ========== Modal Nova Conta ========== */}
+      <Modal
+        isOpen={isAccountModalOpen}
+        onClose={() => setIsAccountModalOpen(false)}
+        title="Nova Conta"
+      >
+        <AccountForm
+          onSubmit={async (data) => {
+            const ok = await accounts.createAccount(data)
+            if (ok) setIsAccountModalOpen(false)
+            return ok
+          }}
+          onCancel={() => setIsAccountModalOpen(false)}
+        />
+      </Modal>
+
+      {/* ========== Modal Nova Categoria ========== */}
+      <Modal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        title="Nova Categoria Financeira"
+      >
+        <FinanceCategoryForm
+          onSubmit={async (data) => {
+            const ok = await categories.createCategory(data)
+            if (ok) setIsCategoryModalOpen(false)
+            return ok
+          }}
+          onCancel={() => setIsCategoryModalOpen(false)}
         />
       </Modal>
     </div>
