@@ -1,5 +1,6 @@
 // Barrel export para todos os tipos do projeto
 export * from './database'
+export * from './finance'
 
 // ----- Tipos compostos compartilhados -----
 

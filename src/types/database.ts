@@ -234,6 +234,29 @@ export type FlashcardUpdate = {
   ease_factor?: number
 }
 
+// ===================== Re-export finance types for Database =====================
+
+import type {
+  FinanceCategory,
+  FinanceCategoryInsert,
+  FinanceCategoryUpdate,
+  FinanceAccount,
+  FinanceAccountInsert,
+  FinanceAccountUpdate,
+  FinanceBill,
+  FinanceBillInsert,
+  FinanceBillUpdate,
+  FinanceTransaction,
+  FinanceTransactionInsert,
+  FinanceTransactionUpdate,
+  FinanceCategoryType,
+  AccountType,
+  TransactionType,
+  PaymentMethod,
+  TransactionStatus,
+  BillStatus,
+} from './finance'
+
 // ===================== Database (Supabase client) =====================
 
 export interface Database {
@@ -378,6 +401,105 @@ export interface Database {
           },
         ]
       }
+      // ===================== Finance Module =====================
+      finance_categories: {
+        Row: FinanceCategory
+        Insert: FinanceCategoryInsert
+        Update: FinanceCategoryUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'finance_categories_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      finance_accounts: {
+        Row: FinanceAccount
+        Insert: FinanceAccountInsert
+        Update: FinanceAccountUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'finance_accounts_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      finance_bills: {
+        Row: FinanceBill
+        Insert: FinanceBillInsert
+        Update: FinanceBillUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'finance_bills_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'finance_bills_account_id_fkey'
+            columns: ['account_id']
+            isOneToOne: false
+            referencedRelation: 'finance_accounts'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      finance_transactions: {
+        Row: FinanceTransaction
+        Insert: FinanceTransactionInsert
+        Update: FinanceTransactionUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'finance_transactions_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'finance_transactions_account_id_fkey'
+            columns: ['account_id']
+            isOneToOne: false
+            referencedRelation: 'finance_accounts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'finance_transactions_destination_account_id_fkey'
+            columns: ['destination_account_id']
+            isOneToOne: false
+            referencedRelation: 'finance_accounts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'finance_transactions_category_id_fkey'
+            columns: ['category_id']
+            isOneToOne: false
+            referencedRelation: 'finance_categories'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'finance_transactions_bill_id_fkey'
+            columns: ['bill_id']
+            isOneToOne: false
+            referencedRelation: 'finance_bills'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'finance_transactions_parent_transaction_id_fkey'
+            columns: ['parent_transaction_id']
+            isOneToOne: false
+            referencedRelation: 'finance_transactions'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -387,6 +509,12 @@ export interface Database {
       task_status: TaskStatus
       session_type: SessionType
       note_type: NoteType
+      finance_category_type: FinanceCategoryType
+      account_type: AccountType
+      transaction_type: TransactionType
+      payment_method: PaymentMethod
+      transaction_status: TransactionStatus
+      bill_status: BillStatus
     }
   }
 }
