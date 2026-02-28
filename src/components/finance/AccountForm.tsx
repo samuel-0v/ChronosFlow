@@ -10,22 +10,31 @@ import type { AccountType, FinanceAccountInsert } from '@/types/finance'
 
 interface AccountFormProps {
   onSubmit: (data: Omit<FinanceAccountInsert, 'user_id'>) => Promise<boolean>
+  /** Callback para criar conta corrente + cartão atrelados */
+  onSubmitHybrid?: (data: {
+    name: string
+    balance: number
+    closing_day: number
+    due_day: number
+  }) => Promise<boolean>
   onCancel?: () => void
 }
 
 // ===================== Componente =====================
 
-export function AccountForm({ onSubmit, onCancel }: AccountFormProps) {
+export function AccountForm({ onSubmit, onSubmitHybrid, onCancel }: AccountFormProps) {
   const [name, setName] = useState('')
   const [type, setType] = useState<AccountType>('CHECKING')
   const [balance, setBalance] = useState('')
   const [closingDay, setClosingDay] = useState('')
   const [dueDay, setDueDay] = useState('')
+  const [hasLinkedCard, setHasLinkedCard] = useState(false)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const isCredit = type === 'CREDIT'
+  const showCardConfig = isCredit || (type === 'CHECKING' && hasLinkedCard)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -36,7 +45,7 @@ export function AccountForm({ onSubmit, onCancel }: AccountFormProps) {
       return
     }
 
-    if (isCredit) {
+    if (showCardConfig) {
       const cd = Number(closingDay)
       const dd = Number(dueDay)
       if (!cd || cd < 1 || cd > 31) {
@@ -51,13 +60,25 @@ export function AccountForm({ onSubmit, onCancel }: AccountFormProps) {
 
     setIsSubmitting(true)
 
-    const success = await onSubmit({
-      name: name.trim(),
-      type,
-      balance: isCredit ? 0 : Number(balance) || 0,
-      closing_day: isCredit ? Number(closingDay) : null,
-      due_day: isCredit ? Number(dueDay) : null,
-    })
+    let success: boolean
+
+    // Conta híbrida: Corrente + Cartão
+    if (type === 'CHECKING' && hasLinkedCard && onSubmitHybrid) {
+      success = await onSubmitHybrid({
+        name: name.trim(),
+        balance: Number(balance) || 0,
+        closing_day: Number(closingDay),
+        due_day: Number(dueDay),
+      })
+    } else {
+      success = await onSubmit({
+        name: name.trim(),
+        type,
+        balance: isCredit ? 0 : Number(balance) || 0,
+        closing_day: showCardConfig ? Number(closingDay) : null,
+        due_day: showCardConfig ? Number(dueDay) : null,
+      })
+    }
 
     setIsSubmitting(false)
 
@@ -72,6 +93,7 @@ export function AccountForm({ onSubmit, onCancel }: AccountFormProps) {
     setBalance('')
     setClosingDay('')
     setDueDay('')
+    setHasLinkedCard(false)
   }
 
   return (
@@ -118,8 +140,24 @@ export function AccountForm({ onSubmit, onCancel }: AccountFormProps) {
         </div>
       )}
 
+      {/* Checkbox de conta híbrida (apenas para Corrente) */}
+      {type === 'CHECKING' && onSubmitHybrid && (
+        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-700/50 bg-slate-800/30 px-4 py-3 transition-colors hover:border-slate-600">
+          <input
+            type="checkbox"
+            checked={hasLinkedCard}
+            onChange={(e) => setHasLinkedCard(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-primary-600 focus:ring-primary-500 focus:ring-offset-0"
+          />
+          <div>
+            <p className="text-sm font-medium text-slate-200">Possui Cartão de Crédito atrelado</p>
+            <p className="text-[11px] text-slate-500">Cria automaticamente uma conta de crédito vinculada</p>
+          </div>
+        </label>
+      )}
+
       {/* Campos adicionais de cartão de crédito */}
-      {isCredit && (
+      {showCardConfig && (
         <div className="space-y-4 rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
           <p className="flex items-center gap-2 text-xs font-medium text-violet-400">
             <CreditCard className="h-3.5 w-3.5" />

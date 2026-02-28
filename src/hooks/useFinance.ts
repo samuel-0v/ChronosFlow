@@ -40,7 +40,14 @@ interface UseFinanceAccountsReturn {
   accounts: FinanceAccount[]
   isLoading: boolean
   createAccount: (data: Omit<FinanceAccountInsert, 'user_id'>) => Promise<boolean>
+  createHybridAccount: (data: {
+    name: string
+    balance: number
+    closing_day: number
+    due_day: number
+  }) => Promise<boolean>
   updateAccount: (id: string, data: FinanceAccountUpdate) => Promise<boolean>
+  updateAccountBalance: (id: string, balance: number) => Promise<boolean>
   deleteAccount: (id: string) => Promise<boolean>
   refetch: () => void
 }
@@ -242,6 +249,62 @@ export function useFinance(): UseFinanceReturn {
 
       if (error) {
         console.error('[useFinance] Erro ao criar conta:', error.message)
+        return false
+      }
+      refetchAccounts()
+      return true
+    },
+    [user, refetchAccounts],
+  )
+
+  /** Cria conta corrente + cartão de crédito atrelado em batch */
+  const createHybridAccount = useCallback(
+    async (data: { name: string; balance: number; closing_day: number; due_day: number }): Promise<boolean> => {
+      if (!user) return false
+
+      const rows: FinanceAccountInsert[] = [
+        {
+          user_id: user.id,
+          name: data.name,
+          type: 'CHECKING',
+          balance: data.balance,
+          closing_day: null,
+          due_day: null,
+        },
+        {
+          user_id: user.id,
+          name: `${data.name} - Cartão`,
+          type: 'CREDIT',
+          balance: 0,
+          closing_day: data.closing_day,
+          due_day: data.due_day,
+        },
+      ]
+
+      const { error } = await supabase.from('finance_accounts').insert(rows)
+
+      if (error) {
+        console.error('[useFinance] Erro ao criar conta híbrida:', error.message)
+        return false
+      }
+      refetchAccounts()
+      return true
+    },
+    [user, refetchAccounts],
+  )
+
+  /** Atualiza apenas o saldo de uma conta */
+  const updateAccountBalance = useCallback(
+    async (id: string, balance: number): Promise<boolean> => {
+      if (!user) return false
+
+      const { error } = await supabase
+        .from('finance_accounts')
+        .update({ balance })
+        .eq('id', id)
+
+      if (error) {
+        console.error('[useFinance] Erro ao atualizar saldo:', error.message)
         return false
       }
       refetchAccounts()
@@ -596,7 +659,9 @@ export function useFinance(): UseFinanceReturn {
       accounts: rawAccounts,
       isLoading: accLoading,
       createAccount,
+      createHybridAccount,
       updateAccount,
+      updateAccountBalance,
       deleteAccount,
       refetch: refetchAccounts,
     },

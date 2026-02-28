@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { CreditCard, ArrowLeftRight, Repeat } from 'lucide-react'
+import { CreditCard, ArrowLeftRight, Repeat, AlertTriangle } from 'lucide-react'
 import { getLocalISODate } from '@/lib/formatTime'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -11,20 +11,16 @@ import type {
   NewTransactionPayload,
   FinanceAccount,
   FinanceCategory,
+  AccountType,
 } from '@/types/finance'
 
 // ===================== Props =====================
 
 interface TransactionFormProps {
-  /** Contas do usuário */
   accounts: FinanceAccount[]
-  /** Categorias financeiras do usuário */
   categories: FinanceCategory[]
-  /** Se o submit está em andamento */
   isSubmitting: boolean
-  /** Callback que recebe o payload validado */
   onSubmit: (payload: NewTransactionPayload) => Promise<boolean>
-  /** Callback para fechar / cancelar */
   onCancel?: () => void
 }
 
@@ -36,12 +32,15 @@ const TYPE_OPTIONS: { value: TransactionType; label: string; icon: string }[] = 
   { value: 'TRANSFER', label: 'Transferência', icon: '🔄' },
 ]
 
-const PAYMENT_OPTIONS: { value: PaymentMethod; label: string }[] = [
-  { value: 'PIX', label: 'Pix' },
-  { value: 'DEBIT', label: 'Débito' },
-  { value: 'CREDIT', label: 'Crédito' },
-  { value: 'CASH', label: 'Dinheiro' },
-]
+/** Regra rígida: quais meios de pagamento cada tipo de conta aceita */
+const PAYMENT_METHODS_BY_ACCOUNT_TYPE: Record<AccountType, { value: PaymentMethod; label: string }[]> = {
+  CASH: [{ value: 'CASH', label: 'Dinheiro' }],
+  CHECKING: [
+    { value: 'PIX', label: 'Pix' },
+    { value: 'DEBIT', label: 'Débito' },
+  ],
+  CREDIT: [{ value: 'CREDIT', label: 'Crédito' }],
+}
 
 // ===================== Componente =====================
 
@@ -54,8 +53,8 @@ export function TransactionForm({
 }: TransactionFormProps) {
   // ----- Estado do formulário -----
   const [type, setType] = useState<TransactionType>('EXPENSE')
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX')
   const [accountId, setAccountId] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX')
   const [destinationAccountId, setDestinationAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [description, setDescription] = useState('')
@@ -67,16 +66,28 @@ export function TransactionForm({
 
   // ----- Derivados -----
   const isTransfer = type === 'TRANSFER'
+  const selectedAccount = accounts.find((a) => a.id === accountId) ?? null
+
+  // Meios de pagamento permitidos pela conta selecionada
+  const allowedPaymentMethods = useMemo(() => {
+    if (isTransfer) return [{ value: 'PIX' as PaymentMethod, label: 'Pix' }]
+    if (!selectedAccount) return []
+    const methods = PAYMENT_METHODS_BY_ACCOUNT_TYPE[selectedAccount.type] ?? []
+    // Receita não aceita crédito
+    if (type === 'INCOME') return methods.filter((m) => m.value !== 'CREDIT')
+    return methods
+  }, [selectedAccount, isTransfer, type])
+
   const isCredit = paymentMethod === 'CREDIT'
   const showInstallments = isCredit && type === 'EXPENSE'
 
-  // Filtra contas por tipo de pagamento selecionado
+  // Contas disponíveis por tipo de transação
   const availableAccounts = useMemo(() => {
-    if (isTransfer) return accounts // Transferência: todas as contas
-    if (isCredit) return accounts.filter((a) => a.type === 'CREDIT')
-    // PIX/DEBIT: contas correntes e dinheiro
-    return accounts.filter((a) => a.type === 'CHECKING' || a.type === 'CASH')
-  }, [accounts, isCredit, isTransfer])
+    if (isTransfer) return accounts
+    // Receita não faz sentido em cartão de crédito
+    if (type === 'INCOME') return accounts.filter((a) => a.type !== 'CREDIT')
+    return accounts
+  }, [accounts, isTransfer, type])
 
   // Contas para destino de transferência (exclui a conta origem)
   const destinationAccounts = useMemo(() => {
@@ -121,18 +132,26 @@ export function TransactionForm({
     }
   }, [availableAccounts, accountId])
 
-  // Reset payment method quando muda o tipo
+  // Sincronizar paymentMethod quando a conta muda
   useEffect(() => {
-    if (type === 'TRANSFER') {
-      setPaymentMethod('PIX')
+    if (allowedPaymentMethods.length > 0) {
+      const currentIsAllowed = allowedPaymentMethods.some((m) => m.value === paymentMethod)
+      if (!currentIsAllowed) {
+        setPaymentMethod(allowedPaymentMethods[0].value)
+      }
+    }
+  }, [allowedPaymentMethods, paymentMethod])
+
+  // Reset estado ao mudar tipo de transação
+  useEffect(() => {
+    if (isTransfer) {
       setCategoryId('')
       setTotalInstallments('1')
     }
     if (type === 'INCOME') {
-      if (paymentMethod === 'CREDIT') setPaymentMethod('PIX')
       setTotalInstallments('1')
     }
-  }, [type])
+  }, [type, isTransfer])
 
   // ----- Submit -----
   const handleSubmit = async (e: FormEvent) => {
@@ -251,48 +270,55 @@ export function TransactionForm({
         />
       </div>
 
-      {/* ---- Meio de pagamento (oculto em transferência) ---- */}
-      {!isTransfer && (
-        <div className="space-y-1.5">
-          <Label htmlFor="tx-payment">Meio de pagamento</Label>
-          <Select
-            id="tx-payment"
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-          >
-            {PAYMENT_OPTIONS
-              .filter((p) => {
-                // Receita não aceita crédito
-                if (type === 'INCOME' && p.value === 'CREDIT') return false
-                return true
-              })
-              .map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-          </Select>
-        </div>
-      )}
-
-      {/* ---- Conta de origem ---- */}
+      {/* ---- Conta de origem (PRIMEIRO — define os meios de pagamento) ---- */}
       <div className="space-y-1.5">
         <Label htmlFor="tx-account">
           {isTransfer ? 'Conta de origem' : 'Conta'}
         </Label>
-        <Select
-          id="tx-account"
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-        >
-          <option value="" disabled>Selecione a conta</option>
-          {availableAccounts.map((acc) => (
-            <option key={acc.id} value={acc.id}>
-              {acc.name} ({acc.type === 'CREDIT' ? 'Crédito' : acc.type === 'CHECKING' ? 'Corrente' : 'Dinheiro'})
-            </option>
-          ))}
-        </Select>
+        {availableAccounts.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-400">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            Nenhuma conta disponível para este tipo de transação.
+          </div>
+        ) : (
+          <Select
+            id="tx-account"
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
+            <option value="" disabled>Selecione a conta</option>
+            {availableAccounts.map((acc) => (
+              <option key={acc.id} value={acc.id}>
+                {acc.name} ({acc.type === 'CREDIT' ? 'Crédito' : acc.type === 'CHECKING' ? 'Corrente' : 'Dinheiro'})
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
+
+      {/* ---- Meio de pagamento (derivado da conta, oculto em transferência) ---- */}
+      {!isTransfer && selectedAccount && (
+        <div className="space-y-1.5">
+          <Label htmlFor="tx-payment">Meio de pagamento</Label>
+          {allowedPaymentMethods.length <= 1 ? (
+            <div className="flex h-10 items-center rounded-lg border border-slate-700 bg-slate-800/50 px-3 text-sm text-slate-300">
+              {allowedPaymentMethods[0]?.label ?? '—'}
+            </div>
+          ) : (
+            <Select
+              id="tx-payment"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+            >
+              {allowedPaymentMethods.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </div>
+      )}
 
       {/* ---- Conta de destino (apenas transferência) ---- */}
       {isTransfer && (
@@ -392,7 +418,11 @@ export function TransactionForm({
             Cancelar
           </Button>
         )}
-        <Button type="submit" isLoading={isSubmitting}>
+        <Button
+          type="submit"
+          isLoading={isSubmitting}
+          disabled={availableAccounts.length === 0}
+        >
           {isTransfer ? 'Transferir' : 'Registrar'}
         </Button>
       </div>

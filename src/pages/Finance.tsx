@@ -16,11 +16,15 @@ import {
   TrendingUp,
   TrendingDown,
   Receipt,
+  Pencil,
+  Trash2,
+  Check,
+  X,
 } from 'lucide-react'
 import { useFinance } from '@/hooks/useFinance'
 import { Modal, Button } from '@/components/ui'
-import { TransactionForm, AccountForm, FinanceCategoryForm } from '@/components/finance'
-import type { TransactionWithDetails, NewTransactionPayload } from '@/types/finance'
+import { TransactionForm, AccountForm, FinanceCategoryForm, SafeDeleteModal } from '@/components/finance'
+import type { TransactionWithDetails, NewTransactionPayload, FinanceAccount } from '@/types/finance'
 
 // ===================== Helpers =====================
 
@@ -118,35 +122,54 @@ function SummaryCard({
 // ===================== Account Card =====================
 
 function AccountCard({
-  name,
-  type,
-  balance,
+  account,
   currentBillTotal,
+  onUpdateBalance,
+  onDelete,
 }: {
-  name: string
-  type: string
-  balance: number
+  account: FinanceAccount
   currentBillTotal: number | null
+  onUpdateBalance: (id: string, balance: number) => Promise<boolean>
+  onDelete: (account: FinanceAccount) => void
 }) {
-  const isCredit = type === 'CREDIT'
+  const isCredit = account.type === 'CREDIT'
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  const startEdit = () => {
+    setEditValue(String(account.balance))
+    setIsEditing(true)
+  }
+
+  const cancelEdit = () => { setIsEditing(false) }
+
+  const saveBalance = async () => {
+    const parsed = Number(editValue)
+    if (isNaN(parsed)) return
+    setIsSaving(true)
+    const ok = await onUpdateBalance(account.id, parsed)
+    setIsSaving(false)
+    if (ok) setIsEditing(false)
+  }
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4 transition-colors hover:border-slate-700 sm:p-5">
+    <div className="group relative flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4 transition-colors hover:border-slate-700 sm:p-5">
       <div
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
           isCredit
             ? 'bg-violet-500/15 text-violet-400'
-            : type === 'CASH'
+            : account.type === 'CASH'
               ? 'bg-emerald-500/15 text-emerald-400'
               : 'bg-sky-500/15 text-sky-400'
         }`}
       >
-        <AccountIcon type={type} />
+        <AccountIcon type={account.type} />
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-slate-100">{name}</p>
-        <p className="text-[11px] text-slate-500">{ACCOUNT_TYPE_LABELS[type] ?? type}</p>
+        <p className="truncate text-sm font-semibold text-slate-100">{account.name}</p>
+        <p className="text-[11px] text-slate-500">{ACCOUNT_TYPE_LABELS[account.type] ?? account.type}</p>
       </div>
 
       <div className="text-right shrink-0">
@@ -157,28 +180,78 @@ function AccountCard({
             </p>
             <p className="text-[10px] text-slate-500">Fatura atual</p>
           </>
+        ) : isEditing ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              step="0.01"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveBalance()
+                if (e.key === 'Escape') cancelEdit()
+              }}
+              autoFocus
+              className="w-28 rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-right text-sm text-slate-100 focus:border-primary-500 focus:outline-none"
+            />
+            <button
+              onClick={saveBalance}
+              disabled={isSaving}
+              className="rounded-md p-1 text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={cancelEdit}
+              className="rounded-md p-1 text-slate-400 hover:bg-slate-700"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         ) : (
           <p
             className={`text-sm font-bold ${
-              balance >= 0 ? 'text-emerald-400' : 'text-red-400'
+              account.balance >= 0 ? 'text-emerald-400' : 'text-red-400'
             }`}
           >
-            {formatCurrency(balance)}
+            {formatCurrency(account.balance)}
           </p>
         )}
       </div>
+
+      {/* Action buttons — visíveis no hover */}
+      {!isEditing && (
+        <div className="absolute -right-1 -top-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          {!isCredit && (
+            <button
+              onClick={startEdit}
+              title="Editar saldo"
+              className="rounded-lg bg-slate-800 p-1.5 text-slate-400 shadow-sm ring-1 ring-slate-700 hover:text-primary-400 hover:ring-primary-600"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+          <button
+            onClick={() => onDelete(account)}
+            title="Excluir conta"
+            className="rounded-lg bg-slate-800 p-1.5 text-slate-400 shadow-sm ring-1 ring-slate-700 hover:text-red-400 hover:ring-red-600"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
 // ===================== Transaction Row =====================
 
-function TransactionRow({ tx }: { tx: TransactionWithDetails }) {
+function TransactionRow({ tx, onDelete }: { tx: TransactionWithDetails; onDelete: (tx: TransactionWithDetails) => void }) {
   const isIncome = tx.type === 'INCOME'
   const isTransfer = tx.type === 'TRANSFER'
 
   return (
-    <div className="flex items-center gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-slate-800/40 sm:gap-4">
+    <div className="group flex items-center gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-slate-800/40 sm:gap-4">
       {/* Ícone */}
       <div
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
@@ -244,6 +317,15 @@ function TransactionRow({ tx }: { tx: TransactionWithDetails }) {
       >
         {isIncome ? '+' : isTransfer ? '' : '−'} {formatCurrency(tx.amount)}
       </span>
+
+      {/* Delete */}
+      <button
+        onClick={() => onDelete(tx)}
+        title="Excluir transação"
+        className="shrink-0 rounded-lg p-1.5 text-slate-600 opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </div>
   )
 }
@@ -268,6 +350,40 @@ export function Finance() {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
   const [txFilter, setTxFilter] = useState<TxFilterKey>('ALL')
+
+  // SafeDelete state
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'account' | 'transaction'
+    id: string
+    name: string
+    warning?: string
+  } | null>(null)
+
+  const handleDeleteAccount = (acc: FinanceAccount) => {
+    setDeleteTarget({
+      type: 'account',
+      id: acc.id,
+      name: acc.name,
+      warning: 'Todas as transações vinculadas a esta conta também serão excluídas.',
+    })
+  }
+
+  const handleDeleteTransaction = (tx: TransactionWithDetails) => {
+    setDeleteTarget({
+      type: 'transaction',
+      id: tx.id,
+      name: tx.description,
+      warning: tx.is_installment
+        ? 'Esta é uma transação parcelada. Parcelas filhas também serão excluídas.'
+        : undefined,
+    })
+  }
+
+  const confirmDelete = async (): Promise<boolean> => {
+    if (!deleteTarget) return false
+    if (deleteTarget.type === 'account') return accounts.deleteAccount(deleteTarget.id)
+    return transactions.deleteTransaction(deleteTarget.id)
+  }
 
   // --- Dados derivados ---
 
@@ -401,10 +517,10 @@ export function Finance() {
             {accounts.accounts.map((acc) => (
               <AccountCard
                 key={acc.id}
-                name={acc.name}
-                type={acc.type}
-                balance={acc.balance}
+                account={acc}
                 currentBillTotal={currentBillByAccount[acc.id] ?? null}
+                onUpdateBalance={accounts.updateAccountBalance}
+                onDelete={handleDeleteAccount}
               />
             ))}
           </div>
@@ -471,7 +587,7 @@ export function Finance() {
         ) : (
           <div className="divide-y divide-slate-800/50 rounded-2xl border border-slate-800 bg-slate-900">
             {filteredTx.map((tx) => (
-              <TransactionRow key={tx.id} tx={tx} />
+              <TransactionRow key={tx.id} tx={tx} onDelete={handleDeleteTransaction} />
             ))}
           </div>
         )}
@@ -518,6 +634,11 @@ export function Finance() {
             if (ok) setIsAccountModalOpen(false)
             return ok
           }}
+          onSubmitHybrid={async (data) => {
+            const ok = await accounts.createHybridAccount(data)
+            if (ok) setIsAccountModalOpen(false)
+            return ok
+          }}
           onCancel={() => setIsAccountModalOpen(false)}
         />
       </Modal>
@@ -537,6 +658,15 @@ export function Finance() {
           onCancel={() => setIsCategoryModalOpen(false)}
         />
       </Modal>
+
+      {/* ========== SafeDelete Modal ========== */}
+      <SafeDeleteModal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        resourceName={deleteTarget?.name ?? ''}
+        warningText={deleteTarget?.warning}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }
