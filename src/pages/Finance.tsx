@@ -1,0 +1,494 @@
+// ==========================================
+// ChronosFlow - Finance Page (Dashboard Financeiro)
+// ==========================================
+
+import { useMemo, useState } from 'react'
+import {
+  Plus,
+  Inbox,
+  Wallet,
+  Landmark,
+  Banknote,
+  CreditCard,
+  ArrowUpRight,
+  ArrowDownRight,
+  ArrowLeftRight,
+  TrendingUp,
+  TrendingDown,
+  Receipt,
+} from 'lucide-react'
+import { useFinance } from '@/hooks/useFinance'
+import { Modal, Button } from '@/components/ui'
+import { TransactionForm } from '@/components/finance'
+import type { TransactionWithDetails } from '@/types/finance'
+
+// ===================== Helpers =====================
+
+function formatCurrency(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  })
+}
+
+function formatDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+}
+
+/** Ícone por tipo de conta */
+function AccountIcon({ type }: { type: string }) {
+  switch (type) {
+    case 'CREDIT':
+      return <CreditCard className="h-5 w-5" />
+    case 'CASH':
+      return <Banknote className="h-5 w-5" />
+    default:
+      return <Landmark className="h-5 w-5" />
+  }
+}
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  CHECKING: 'Conta Corrente',
+  CREDIT: 'Cartão de Crédito',
+  CASH: 'Dinheiro',
+}
+
+// ===================== Skeleton components =====================
+
+function SkeletonCard() {
+  return (
+    <div className="animate-pulse rounded-2xl border border-slate-800 bg-slate-900 p-5">
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-slate-800" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3.5 w-24 rounded bg-slate-800" />
+          <div className="h-3 w-16 rounded bg-slate-800/60" />
+        </div>
+        <div className="h-5 w-20 rounded bg-slate-800" />
+      </div>
+    </div>
+  )
+}
+
+function SkeletonRow() {
+  return (
+    <div className="animate-pulse flex items-center gap-4 px-4 py-3.5">
+      <div className="h-8 w-8 rounded-lg bg-slate-800" />
+      <div className="flex-1 space-y-1.5">
+        <div className="h-3.5 w-40 rounded bg-slate-800" />
+        <div className="h-3 w-24 rounded bg-slate-800/60" />
+      </div>
+      <div className="h-4 w-20 rounded bg-slate-800" />
+    </div>
+  )
+}
+
+// ===================== Summary cards =====================
+
+function SummaryCard({
+  label,
+  value,
+  icon,
+  colorClass,
+}: {
+  label: string
+  value: number
+  icon: React.ReactNode
+  colorClass: string
+}) {
+  return (
+    <div className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+      <div
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${colorClass}`}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-slate-500">{label}</p>
+        <p className="mt-0.5 text-lg font-bold text-slate-100 truncate">
+          {formatCurrency(value)}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ===================== Account Card =====================
+
+function AccountCard({
+  name,
+  type,
+  balance,
+  currentBillTotal,
+}: {
+  name: string
+  type: string
+  balance: number
+  currentBillTotal: number | null
+}) {
+  const isCredit = type === 'CREDIT'
+
+  return (
+    <div className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4 transition-colors hover:border-slate-700 sm:p-5">
+      <div
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+          isCredit
+            ? 'bg-violet-500/15 text-violet-400'
+            : type === 'CASH'
+              ? 'bg-emerald-500/15 text-emerald-400'
+              : 'bg-sky-500/15 text-sky-400'
+        }`}
+      >
+        <AccountIcon type={type} />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-slate-100">{name}</p>
+        <p className="text-[11px] text-slate-500">{ACCOUNT_TYPE_LABELS[type] ?? type}</p>
+      </div>
+
+      <div className="text-right shrink-0">
+        {isCredit ? (
+          <>
+            <p className="text-sm font-bold text-violet-400">
+              {currentBillTotal !== null ? formatCurrency(currentBillTotal) : '—'}
+            </p>
+            <p className="text-[10px] text-slate-500">Fatura atual</p>
+          </>
+        ) : (
+          <p
+            className={`text-sm font-bold ${
+              balance >= 0 ? 'text-emerald-400' : 'text-red-400'
+            }`}
+          >
+            {formatCurrency(balance)}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ===================== Transaction Row =====================
+
+function TransactionRow({ tx }: { tx: TransactionWithDetails }) {
+  const isIncome = tx.type === 'INCOME'
+  const isTransfer = tx.type === 'TRANSFER'
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-slate-800/40 sm:gap-4">
+      {/* Ícone */}
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+          isTransfer
+            ? 'bg-sky-500/10 text-sky-400'
+            : isIncome
+              ? 'bg-emerald-500/10 text-emerald-400'
+              : 'bg-red-500/10 text-red-400'
+        }`}
+      >
+        {isTransfer ? (
+          <ArrowLeftRight className="h-4 w-4" />
+        ) : isIncome ? (
+          <ArrowUpRight className="h-4 w-4" />
+        ) : (
+          <ArrowDownRight className="h-4 w-4" />
+        )}
+      </div>
+
+      {/* Descrição + categoria */}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-slate-200">{tx.description}</p>
+        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
+          <span>{formatDate(tx.date)}</span>
+          {tx.finance_categories && (
+            <>
+              <span className="text-slate-700">·</span>
+              <span className="flex items-center gap-1">
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: tx.finance_categories.color_hex }}
+                />
+                {tx.finance_categories.name}
+              </span>
+            </>
+          )}
+          {tx.finance_accounts && (
+            <>
+              <span className="hidden text-slate-700 sm:inline">·</span>
+              <span className="hidden sm:inline">{tx.finance_accounts.name}</span>
+            </>
+          )}
+          {tx.is_installment && tx.installment_number && tx.total_installments && (
+            <>
+              <span className="text-slate-700">·</span>
+              <span className="text-slate-400">
+                {tx.installment_number}/{tx.total_installments}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Valor */}
+      <span
+        className={`shrink-0 text-sm font-bold tabular-nums ${
+          isTransfer
+            ? 'text-sky-400'
+            : isIncome
+              ? 'text-emerald-400'
+              : 'text-red-400'
+        }`}
+      >
+        {isIncome ? '+' : isTransfer ? '' : '−'} {formatCurrency(tx.amount)}
+      </span>
+    </div>
+  )
+}
+
+// ===================== Filtros =====================
+
+type TxFilterKey = 'ALL' | 'INCOME' | 'EXPENSE' | 'TRANSFER'
+
+const TX_FILTER_OPTIONS: { key: TxFilterKey; label: string }[] = [
+  { key: 'ALL', label: 'Todas' },
+  { key: 'INCOME', label: 'Receitas' },
+  { key: 'EXPENSE', label: 'Despesas' },
+  { key: 'TRANSFER', label: 'Transferências' },
+]
+
+// ===================== Page =====================
+
+export function Finance() {
+  const { accounts, categories, bills, transactions } = useFinance()
+
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [txFilter, setTxFilter] = useState<TxFilterKey>('ALL')
+
+  // --- Dados derivados ---
+
+  // Saldo consolidado (todas as contas exceto crédito)
+  const totalBalance = useMemo(() => {
+    return accounts.accounts
+      .filter((a) => a.type !== 'CREDIT')
+      .reduce((sum, a) => sum + a.balance, 0)
+  }, [accounts.accounts])
+
+  // Total de receitas do mês atual
+  const { monthlyIncome, monthlyExpense } = useMemo(() => {
+    const now = new Date()
+    const currentMonth = now.getMonth() + 1
+    const currentYear = now.getFullYear()
+
+    let income = 0
+    let expense = 0
+
+    for (const tx of transactions.transactions) {
+      const [y, m] = tx.date.split('-').map(Number)
+      if (y !== currentYear || m !== currentMonth) continue
+      if (tx.type === 'INCOME') income += tx.amount
+      else if (tx.type === 'EXPENSE') expense += tx.amount
+    }
+
+    return { monthlyIncome: income, monthlyExpense: expense }
+  }, [transactions.transactions])
+
+  // Fatura atual de cada cartão de crédito
+  const currentBillByAccount = useMemo(() => {
+    const now = new Date()
+    const m = now.getMonth() + 1
+    const y = now.getFullYear()
+    const map: Record<string, number> = {}
+
+    for (const bill of bills.bills) {
+      if (bill.month === m && bill.year === y) {
+        map[bill.account_id] = bill.total_amount
+      }
+    }
+    return map
+  }, [bills.bills])
+
+  // Transações filtradas
+  const filteredTx = useMemo(() => {
+    if (txFilter === 'ALL') return transactions.transactions
+    return transactions.transactions.filter((tx) => tx.type === txFilter)
+  }, [transactions.transactions, txFilter])
+
+  const isAnythingLoading = accounts.isLoading || transactions.isLoading
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      {/* ========== Header ========== */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Finanças</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Gerencie receitas, despesas e cartões de crédito.
+          </p>
+        </div>
+        <Button onClick={() => setIsCreateOpen(true)}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          Nova Movimentação
+        </Button>
+      </div>
+
+      {/* ========== Summary Cards ========== */}
+      {isAnythingLoading ? (
+        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : (
+        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <SummaryCard
+            label="Saldo Total"
+            value={totalBalance}
+            icon={<Wallet className="h-5 w-5" />}
+            colorClass="bg-primary-600/15 text-primary-400"
+          />
+          <SummaryCard
+            label="Receita do Mês"
+            value={monthlyIncome}
+            icon={<TrendingUp className="h-5 w-5" />}
+            colorClass="bg-emerald-500/15 text-emerald-400"
+          />
+          <SummaryCard
+            label="Despesa do Mês"
+            value={monthlyExpense}
+            icon={<TrendingDown className="h-5 w-5" />}
+            colorClass="bg-red-500/15 text-red-400"
+          />
+        </div>
+      )}
+
+      {/* ========== Contas ========== */}
+      <section className="mb-8">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
+          <Landmark className="h-4 w-4 text-slate-500" />
+          Minhas Contas
+        </h2>
+
+        {accounts.isLoading ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        ) : accounts.accounts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 py-12">
+            <Landmark className="mb-2 h-7 w-7 text-slate-700" />
+            <p className="text-sm font-medium text-slate-500">Nenhuma conta cadastrada.</p>
+            <p className="mt-0.5 text-xs text-slate-600">
+              Cadastre suas contas e cartões para começar.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {accounts.accounts.map((acc) => (
+              <AccountCard
+                key={acc.id}
+                name={acc.name}
+                type={acc.type}
+                balance={acc.balance}
+                currentBillTotal={currentBillByAccount[acc.id] ?? null}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ========== Transações ========== */}
+      <section>
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300">
+            <Receipt className="h-4 w-4 text-slate-500" />
+            Transações Recentes
+          </h2>
+
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-1.5">
+            {TX_FILTER_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setTxFilter(opt.key)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  txFilter === opt.key
+                    ? 'bg-primary-600/15 text-primary-400'
+                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {transactions.isLoading ? (
+          <div className="divide-y divide-slate-800/50 rounded-2xl border border-slate-800 bg-slate-900">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonRow key={i} />
+            ))}
+          </div>
+        ) : filteredTx.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 py-16">
+            <Inbox className="mb-2 h-8 w-8 text-slate-700" />
+            <p className="text-sm font-medium text-slate-500">
+              {txFilter === 'ALL'
+                ? 'Nenhuma movimentação registrada.'
+                : 'Nenhuma movimentação neste filtro.'}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-600">
+              {txFilter === 'ALL'
+                ? 'Clique em "Nova Movimentação" para começar.'
+                : 'Tente outro filtro ou registre uma movimentação.'}
+            </p>
+            {txFilter === 'ALL' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => setIsCreateOpen(true)}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Registrar primeira movimentação
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-800/50 rounded-2xl border border-slate-800 bg-slate-900">
+            {filteredTx.map((tx) => (
+              <TransactionRow key={tx.id} tx={tx} />
+            ))}
+          </div>
+        )}
+
+        {/* Contagem */}
+        {!transactions.isLoading && filteredTx.length > 0 && (
+          <p className="mt-3 text-center text-xs text-slate-600">
+            {filteredTx.length}{' '}
+            {filteredTx.length === 1 ? 'movimentação' : 'movimentações'}
+            {txFilter !== 'ALL' &&
+              ` · filtro: ${TX_FILTER_OPTIONS.find((o) => o.key === txFilter)?.label}`}
+          </p>
+        )}
+      </section>
+
+      {/* ========== Modal Nova Movimentação ========== */}
+      <Modal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        title="Nova Movimentação"
+      >
+        <TransactionForm
+          accounts={accounts.accounts}
+          categories={categories.categories}
+          isSubmitting={transactions.isSubmitting}
+          onSubmit={transactions.createTransaction}
+          onCancel={() => setIsCreateOpen(false)}
+        />
+      </Modal>
+    </div>
+  )
+}

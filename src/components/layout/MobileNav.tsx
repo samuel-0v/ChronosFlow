@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Briefcase, BookOpen, ListTodo, Tag, LogOut, User, Menu, X } from 'lucide-react'
+import { Home, Briefcase, BookOpen, ListTodo, Tag, LogOut, User, Menu, X, Wallet } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfile } from '@/hooks/useProfile'
 
@@ -21,6 +21,7 @@ const primaryItems: MobileNavItem[] = [
 // ----- Itens dentro do Bottom Sheet -----
 
 const moreItems: MobileNavItem[] = [
+  { to: '/finance', label: 'Finanças', icon: <Wallet className="h-5 w-5" /> },
   { to: '/tasks', label: 'Tarefas', icon: <ListTodo className="h-5 w-5" /> },
   { to: '/settings', label: 'Categorias', icon: <Tag className="h-5 w-5" /> },
   { to: '/profile', label: 'Perfil', icon: <User className="h-5 w-5" /> },
