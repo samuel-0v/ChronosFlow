@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { Label } from '@/components/ui/Label'
+import { formatCurrency } from '@/lib/formatCurrency'
 import type { BillWithAccount, FinanceAccount, BillStatus } from '@/types/finance'
 
 // ===================== Props =====================
@@ -27,10 +28,6 @@ const MONTH_NAMES = [
   '', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ]
-
-function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
 
 function statusConfig(status: BillStatus) {
   switch (status) {

@@ -25,16 +25,10 @@ import {
 import { useFinance } from '@/hooks/useFinance'
 import { Modal, Button } from '@/components/ui'
 import { TransactionForm, AccountForm, SafeDeleteModal, BillManager, CategoryManager } from '@/components/finance'
+import { formatCurrency } from '@/lib/formatCurrency'
 import type { TransactionWithDetails, NewTransactionPayload, FinanceAccount } from '@/types/finance'
 
 // ===================== Helpers =====================
-
-function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  })
-}
 
 function formatDate(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
@@ -97,11 +91,14 @@ function SummaryCard({
   value,
   icon,
   colorClass,
+  valueColorClass,
 }: {
   label: string
   value: number
   icon: React.ReactNode
   colorClass: string
+  /** Classe de cor do valor exibido (ex: text-emerald-400) */
+  valueColorClass?: string
 }) {
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
@@ -112,7 +109,7 @@ function SummaryCard({
       </div>
       <div className="min-w-0">
         <p className="text-xs font-medium text-slate-500">{label}</p>
-        <p className="mt-0.5 text-lg font-bold text-slate-100 truncate">
+        <p className={`mt-0.5 text-lg font-bold truncate ${valueColorClass ?? 'text-slate-100'}`}>
           {formatCurrency(value)}
         </p>
       </div>
@@ -482,18 +479,21 @@ export function Finance() {
             value={totalBalance}
             icon={<Wallet className="h-5 w-5" />}
             colorClass="bg-primary-600/15 text-primary-400"
+            valueColorClass={totalBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}
           />
           <SummaryCard
             label="Receita do Mês"
             value={monthlyIncome}
             icon={<TrendingUp className="h-5 w-5" />}
             colorClass="bg-emerald-500/15 text-emerald-400"
+            valueColorClass="text-emerald-400"
           />
           <SummaryCard
             label="Despesa do Mês"
             value={monthlyExpense}
             icon={<TrendingDown className="h-5 w-5" />}
             colorClass="bg-red-500/15 text-red-400"
+            valueColorClass="text-red-400"
           />
         </div>
       )}
