@@ -20,7 +20,7 @@ interface TransactionFormProps {
   accounts: FinanceAccount[]
   categories: FinanceCategory[]
   isSubmitting: boolean
-  onSubmit: (payload: NewTransactionPayload) => Promise<boolean>
+  onSubmit: (payload: NewTransactionPayload) => Promise<{ ok: boolean; error?: string }>
   onCancel?: () => void
 }
 
@@ -196,10 +196,10 @@ export function TransactionForm({
       total_installments: parsedInstallments,
     }
 
-    const success = await onSubmit(payload)
+    const result = await onSubmit(payload)
 
-    if (!success) {
-      setError('Erro ao salvar transação. Tente novamente.')
+    if (!result.ok) {
+      setError(result.error ?? 'Erro ao salvar transação. Tente novamente.')
       return
     }
 

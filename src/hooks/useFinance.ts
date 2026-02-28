@@ -57,7 +57,7 @@ interface UseFinanceBillsReturn {
   isLoading: boolean
   getOrCreateBill: (accountId: string, month: number, year: number) => Promise<FinanceBill | null>
   updateBillStatus: (id: string, status: FinanceBill['status']) => Promise<boolean>
-  payBill: (billId: string, sourceAccountId: string) => Promise<boolean>
+  payBill: (billId: string, sourceAccountId: string) => Promise<{ ok: boolean; error?: string }>
   refetch: () => void
 }
 
@@ -65,7 +65,7 @@ interface UseFinanceTransactionsReturn {
   transactions: TransactionWithDetails[]
   isLoading: boolean
   isSubmitting: boolean
-  createTransaction: (payload: NewTransactionPayload) => Promise<boolean>
+  createTransaction: (payload: NewTransactionPayload) => Promise<{ ok: boolean; error?: string }>
   updateTransaction: (id: string, data: FinanceTransactionUpdate) => Promise<boolean>
   deleteTransaction: (id: string) => Promise<boolean>
   refetch: () => void
@@ -437,8 +437,8 @@ export function useFinance(): UseFinanceReturn {
    *   4. Insere transação de TRANSFER da conta origem para o cartão
    */
   const payBill = useCallback(
-    async (billId: string, sourceAccountId: string): Promise<boolean> => {
-      if (!user) return false
+    async (billId: string, sourceAccountId: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!user) return { ok: false, error: 'Usuário não autenticado.' }
 
       try {
         // 1) Busca a fatura
@@ -450,10 +450,22 @@ export function useFinance(): UseFinanceReturn {
 
         if (billErr || !bill) {
           console.error('[useFinance] payBill — erro ao buscar fatura:', billErr?.message)
-          return false
+          return { ok: false, error: 'Não foi possível buscar a fatura.' }
         }
 
-        // 2) Marca a fatura como PAID
+        // 2) Validação de saldo na conta de origem
+        const sourceAccount = rawAccounts.find((a) => a.id === sourceAccountId)
+        if (!sourceAccount) return { ok: false, error: 'Conta de origem não encontrada.' }
+
+        if (sourceAccount.balance < bill.total_amount) {
+          const falta = bill.total_amount - sourceAccount.balance
+          return {
+            ok: false,
+            error: `Saldo insuficiente em "${sourceAccount.name}". Faltam R$ ${falta.toFixed(2)}.`,
+          }
+        }
+
+        // 3) Marca a fatura como PAID
         const { error: updateBillErr } = await supabase
           .from('finance_bills')
           .update({ status: 'PAID' as const })
@@ -461,10 +473,10 @@ export function useFinance(): UseFinanceReturn {
 
         if (updateBillErr) {
           console.error('[useFinance] payBill — erro ao atualizar fatura:', updateBillErr.message)
-          return false
+          return { ok: false, error: 'Erro ao atualizar status da fatura.' }
         }
 
-        // 3) Marca todas as transações da fatura como PAID
+        // 4) Marca todas as transações da fatura como PAID
         const { error: updateTxErr } = await supabase
           .from('finance_transactions')
           .update({ status: 'PAID' as const })
@@ -472,13 +484,11 @@ export function useFinance(): UseFinanceReturn {
 
         if (updateTxErr) {
           console.error('[useFinance] payBill — erro ao validar transações:', updateTxErr.message)
-          // Fatura já está PAID, mas transações falharam — alertar
-          return false
+          return { ok: false, error: 'Erro ao validar transações da fatura.' }
         }
 
-        // 4) Determina o payment_method pela conta de origem
-        const sourceAccount = rawAccounts.find((a) => a.id === sourceAccountId)
-        const pm = sourceAccount?.type === 'CASH' ? 'CASH' : 'DEBIT'
+        // 5) Insere transação TRANSFER (conta origem → cartão)
+        const pm = sourceAccount.type === 'CASH' ? 'CASH' : 'DEBIT'
 
         const transferRow: FinanceTransactionInsert = {
           user_id: user.id,
@@ -499,17 +509,17 @@ export function useFinance(): UseFinanceReturn {
 
         if (insertErr) {
           console.error('[useFinance] payBill — erro ao inserir transferência:', insertErr.message)
-          return false
+          return { ok: false, error: 'Erro ao registrar transferência de pagamento.' }
         }
 
         // Sucesso — recarrega tudo
         refetchBills()
         refetchTransactions()
         refetchAccounts()
-        return true
+        return { ok: true }
       } catch (err) {
         console.error('[useFinance] payBill — erro inesperado:', err)
-        return false
+        return { ok: false, error: 'Erro inesperado ao pagar fatura.' }
       }
     },
     [user, rawAccounts, refetchBills, refetchTransactions, refetchAccounts],
@@ -529,8 +539,8 @@ export function useFinance(): UseFinanceReturn {
    * Transações de débito/pix/dinheiro nascem com status = 'PAID'.
    */
   const createTransaction = useCallback(
-    async (payload: NewTransactionPayload): Promise<boolean> => {
-      if (!user) return false
+    async (payload: NewTransactionPayload): Promise<{ ok: boolean; error?: string }> => {
+      if (!user) return { ok: false, error: 'Usuário não autenticado.' }
       setTxSubmitting(true)
 
       const {
@@ -548,6 +558,21 @@ export function useFinance(): UseFinanceReturn {
       const isCredit = payment_method === 'CREDIT'
       const isInstallment = isCredit && total_installments > 1
       const baseStatus = isCredit ? 'PENDING' : 'PAID'
+
+      // ---- Validação de saldo (despesas à vista e transferências) ----
+      const needsBalanceCheck =
+        (!isCredit && type === 'EXPENSE') || type === 'TRANSFER'
+
+      if (needsBalanceCheck) {
+        const sourceAccount = rawAccounts.find((a) => a.id === account_id)
+        if (sourceAccount && sourceAccount.balance < amount) {
+          setTxSubmitting(false)
+          return {
+            ok: false,
+            error: `Saldo insuficiente na conta "${sourceAccount.name}". Disponível: R$ ${sourceAccount.balance.toFixed(2)}.`,
+          }
+        }
+      }
 
       try {
         // ---- Parcelamento (Crédito com N > 1) ----
@@ -597,7 +622,7 @@ export function useFinance(): UseFinanceReturn {
           if (parentErr || !parentData) {
             console.error('[useFinance] Erro parcela-mãe:', parentErr?.message)
             setTxSubmitting(false)
-            return false
+            return { ok: false, error: 'Erro ao criar parcela principal.' }
           }
 
           const parentId = parentData.id
@@ -631,7 +656,7 @@ export function useFinance(): UseFinanceReturn {
             if (childErr) {
               console.error('[useFinance] Erro parcelas-filhas:', childErr.message)
               setTxSubmitting(false)
-              return false
+              return { ok: false, error: 'Erro ao criar parcelas.' }
             }
           }
         } else {
@@ -667,7 +692,7 @@ export function useFinance(): UseFinanceReturn {
           if (insertErr) {
             console.error('[useFinance] Erro ao criar transação:', insertErr.message)
             setTxSubmitting(false)
-            return false
+            return { ok: false, error: 'Erro ao criar transação.' }
           }
         }
 
@@ -676,11 +701,11 @@ export function useFinance(): UseFinanceReturn {
         refetchBills()
         refetchAccounts() // Saldo atualizado pelos triggers
         setTxSubmitting(false)
-        return true
+        return { ok: true }
       } catch (err) {
         console.error('[useFinance] Erro inesperado:', err)
         setTxSubmitting(false)
-        return false
+        return { ok: false, error: 'Erro inesperado ao criar transação.' }
       }
     },
     [user, getOrCreateBill, refetchTransactions, refetchBills, refetchAccounts],

@@ -20,10 +20,11 @@ import {
   Trash2,
   Check,
   X,
+  Tag,
 } from 'lucide-react'
 import { useFinance } from '@/hooks/useFinance'
 import { Modal, Button } from '@/components/ui'
-import { TransactionForm, AccountForm, FinanceCategoryForm, SafeDeleteModal, BillManager } from '@/components/finance'
+import { TransactionForm, AccountForm, SafeDeleteModal, BillManager, CategoryManager } from '@/components/finance'
 import type { TransactionWithDetails, NewTransactionPayload, FinanceAccount } from '@/types/finance'
 
 // ===================== Helpers =====================
@@ -449,8 +450,8 @@ export function Finance() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setIsCategoryModalOpen(true)}>
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Categoria
+            <Tag className="mr-1 h-3.5 w-3.5" />
+            Categorias
           </Button>
           <Button variant="outline" size="sm" onClick={() => setIsAccountModalOpen(true)}>
             <Landmark className="mr-1 h-3.5 w-3.5" />
@@ -619,9 +620,9 @@ export function Finance() {
           categories={categories.categories}
           isSubmitting={transactions.isSubmitting}
           onSubmit={async (payload: NewTransactionPayload) => {
-            const ok = await transactions.createTransaction(payload)
-            if (ok) setIsCreateOpen(false)
-            return ok
+            const result = await transactions.createTransaction(payload)
+            if (result.ok) setIsCreateOpen(false)
+            return result
           }}
           onCancel={() => setIsCreateOpen(false)}
         />
@@ -648,19 +649,18 @@ export function Finance() {
         />
       </Modal>
 
-      {/* ========== Modal Nova Categoria ========== */}
+      {/* ========== Modal Categorias ========== */}
       <Modal
         isOpen={isCategoryModalOpen}
         onClose={() => setIsCategoryModalOpen(false)}
-        title="Nova Categoria Financeira"
+        title="Categorias Financeiras"
       >
-        <FinanceCategoryForm
-          onSubmit={async (data) => {
-            const ok = await categories.createCategory(data)
-            if (ok) setIsCategoryModalOpen(false)
-            return ok
-          }}
-          onCancel={() => setIsCategoryModalOpen(false)}
+        <CategoryManager
+          categories={categories.categories}
+          isLoading={categories.isLoading}
+          onCreate={categories.createCategory}
+          onUpdate={categories.updateCategory}
+          onDelete={categories.deleteCategory}
         />
       </Modal>
 

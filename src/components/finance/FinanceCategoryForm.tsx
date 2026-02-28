@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Label } from '@/components/ui/Label'
-import type { FinanceCategoryType, FinanceCategoryInsert } from '@/types/finance'
+import type { FinanceCategoryType, FinanceCategoryInsert, FinanceCategory } from '@/types/finance'
 
 // ===================== Props =====================
 
 interface CategoryFormProps {
+  initialData?: FinanceCategory
   onSubmit: (data: Omit<FinanceCategoryInsert, 'user_id'>) => Promise<boolean>
   onCancel?: () => void
 }
@@ -31,10 +32,11 @@ const COLOR_PALETTE = [
 
 // ===================== Componente =====================
 
-export function FinanceCategoryForm({ onSubmit, onCancel }: CategoryFormProps) {
-  const [name, setName] = useState('')
-  const [type, setType] = useState<FinanceCategoryType>('EXPENSE')
-  const [colorHex, setColorHex] = useState(COLOR_PALETTE[0])
+export function FinanceCategoryForm({ initialData, onSubmit, onCancel }: CategoryFormProps) {
+  const isEditing = !!initialData
+  const [name, setName] = useState(initialData?.name ?? '')
+  const [type, setType] = useState<FinanceCategoryType>(initialData?.type ?? 'EXPENSE')
+  const [colorHex, setColorHex] = useState(initialData?.color_hex ?? COLOR_PALETTE[0])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -59,14 +61,15 @@ export function FinanceCategoryForm({ onSubmit, onCancel }: CategoryFormProps) {
     setIsSubmitting(false)
 
     if (!success) {
-      setError('Erro ao criar categoria. Tente novamente.')
+      setError(isEditing ? 'Erro ao atualizar categoria.' : 'Erro ao criar categoria.')
       return
     }
 
-    // Reset — o pai fecha o modal
-    setName('')
-    setType('EXPENSE')
-    setColorHex(COLOR_PALETTE[0])
+    if (!isEditing) {
+      setName('')
+      setType('EXPENSE')
+      setColorHex(COLOR_PALETTE[0])
+    }
   }
 
   return (
@@ -131,7 +134,7 @@ export function FinanceCategoryForm({ onSubmit, onCancel }: CategoryFormProps) {
           </Button>
         )}
         <Button type="submit" isLoading={isSubmitting}>
-          Criar Categoria
+          {isEditing ? 'Salvar' : 'Criar Categoria'}
         </Button>
       </div>
     </form>

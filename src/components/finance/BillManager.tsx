@@ -18,7 +18,7 @@ interface BillManagerProps {
   bills: BillWithAccount[]
   accounts: FinanceAccount[]
   isLoading: boolean
-  onPayBill: (billId: string, sourceAccountId: string) => Promise<boolean>
+  onPayBill: (billId: string, sourceAccountId: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 // ===================== Helpers =====================
@@ -79,7 +79,7 @@ function BillRow({
 }: {
   bill: BillWithAccount
   payableAccounts: FinanceAccount[]
-  onPay: (billId: string, sourceAccountId: string) => Promise<boolean>
+  onPay: (billId: string, sourceAccountId: string) => Promise<{ ok: boolean; error?: string }>
 }) {
   const [showPayForm, setShowPayForm] = useState(false)
   const [sourceAccountId, setSourceAccountId] = useState('')
@@ -99,11 +99,11 @@ function BillRow({
     setError(null)
     setIsPaying(true)
 
-    const ok = await onPay(bill.id, sourceAccountId)
+    const result = await onPay(bill.id, sourceAccountId)
     setIsPaying(false)
 
-    if (!ok) {
-      setError('Erro ao pagar fatura. Tente novamente.')
+    if (!result.ok) {
+      setError(result.error ?? 'Erro ao pagar fatura. Tente novamente.')
       return
     }
 
