@@ -57,6 +57,7 @@ interface UseFinanceBillsReturn {
   isLoading: boolean
   getOrCreateBill: (accountId: string, month: number, year: number) => Promise<FinanceBill | null>
   updateBillStatus: (id: string, status: FinanceBill['status']) => Promise<boolean>
+  payBill: (billId: string, sourceAccountId: string) => Promise<boolean>
   refetch: () => void
 }
 
@@ -423,6 +424,97 @@ export function useFinance(): UseFinanceReturn {
     [user, refetchBills],
   )
 
+  /**
+   * payBill — Paga uma fatura de cartão de crédito.
+   *
+   * Regra de ouro: pagar fatura NÃO é despesa, é uma TRANSFERÊNCIA
+   * da conta corrente/dinheiro para a conta do cartão de crédito.
+   *
+   * Fluxo:
+   *   1. Busca detalhes da fatura (total_amount, account_id do cartão)
+   *   2. Atualiza bill.status = 'PAID'
+   *   3. Atualiza todas as transações vinculadas (bill_id) para status = 'PAID'
+   *   4. Insere transação de TRANSFER da conta origem para o cartão
+   */
+  const payBill = useCallback(
+    async (billId: string, sourceAccountId: string): Promise<boolean> => {
+      if (!user) return false
+
+      try {
+        // 1) Busca a fatura
+        const { data: bill, error: billErr } = await supabase
+          .from('finance_bills')
+          .select('id, total_amount, account_id, month, year')
+          .eq('id', billId)
+          .single()
+
+        if (billErr || !bill) {
+          console.error('[useFinance] payBill — erro ao buscar fatura:', billErr?.message)
+          return false
+        }
+
+        // 2) Marca a fatura como PAID
+        const { error: updateBillErr } = await supabase
+          .from('finance_bills')
+          .update({ status: 'PAID' as const })
+          .eq('id', billId)
+
+        if (updateBillErr) {
+          console.error('[useFinance] payBill — erro ao atualizar fatura:', updateBillErr.message)
+          return false
+        }
+
+        // 3) Marca todas as transações da fatura como PAID
+        const { error: updateTxErr } = await supabase
+          .from('finance_transactions')
+          .update({ status: 'PAID' as const })
+          .eq('bill_id', billId)
+
+        if (updateTxErr) {
+          console.error('[useFinance] payBill — erro ao validar transações:', updateTxErr.message)
+          // Fatura já está PAID, mas transações falharam — alertar
+          return false
+        }
+
+        // 4) Determina o payment_method pela conta de origem
+        const sourceAccount = rawAccounts.find((a) => a.id === sourceAccountId)
+        const pm = sourceAccount?.type === 'CASH' ? 'CASH' : 'DEBIT'
+
+        const transferRow: FinanceTransactionInsert = {
+          user_id: user.id,
+          account_id: sourceAccountId,
+          destination_account_id: bill.account_id,
+          type: 'TRANSFER',
+          payment_method: pm,
+          description: `Pagamento de Fatura — ${String(bill.month).padStart(2, '0')}/${bill.year}`,
+          amount: bill.total_amount,
+          date: getLocalISODate(),
+          status: 'PAID',
+          is_installment: false,
+        }
+
+        const { error: insertErr } = await supabase
+          .from('finance_transactions')
+          .insert([transferRow])
+
+        if (insertErr) {
+          console.error('[useFinance] payBill — erro ao inserir transferência:', insertErr.message)
+          return false
+        }
+
+        // Sucesso — recarrega tudo
+        refetchBills()
+        refetchTransactions()
+        refetchAccounts()
+        return true
+      } catch (err) {
+        console.error('[useFinance] payBill — erro inesperado:', err)
+        return false
+      }
+    },
+    [user, rawAccounts, refetchBills, refetchTransactions, refetchAccounts],
+  )
+
   // ===================== Mutations: Transações =====================
 
   /**
@@ -670,6 +762,7 @@ export function useFinance(): UseFinanceReturn {
       isLoading: billsLoading,
       getOrCreateBill,
       updateBillStatus,
+      payBill,
       refetch: refetchBills,
     },
     transactions: {

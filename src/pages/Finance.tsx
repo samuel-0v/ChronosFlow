@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import { useFinance } from '@/hooks/useFinance'
 import { Modal, Button } from '@/components/ui'
-import { TransactionForm, AccountForm, FinanceCategoryForm, SafeDeleteModal } from '@/components/finance'
+import { TransactionForm, AccountForm, FinanceCategoryForm, SafeDeleteModal, BillManager } from '@/components/finance'
 import type { TransactionWithDetails, NewTransactionPayload, FinanceAccount } from '@/types/finance'
 
 // ===================== Helpers =====================
@@ -349,6 +349,7 @@ export function Finance() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  const [isBillManagerOpen, setIsBillManagerOpen] = useState(false)
   const [txFilter, setTxFilter] = useState<TxFilterKey>('ALL')
 
   // SafeDelete state
@@ -454,6 +455,10 @@ export function Finance() {
           <Button variant="outline" size="sm" onClick={() => setIsAccountModalOpen(true)}>
             <Landmark className="mr-1 h-3.5 w-3.5" />
             Nova Conta
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsBillManagerOpen(true)}>
+            <CreditCard className="mr-1 h-3.5 w-3.5" />
+            Faturas
           </Button>
           <Button onClick={() => setIsCreateOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -667,6 +672,20 @@ export function Finance() {
         warningText={deleteTarget?.warning}
         onConfirm={confirmDelete}
       />
+
+      {/* ========== Modal Faturas ========== */}
+      <Modal
+        isOpen={isBillManagerOpen}
+        onClose={() => setIsBillManagerOpen(false)}
+        title="Faturas de Cartão de Crédito"
+      >
+        <BillManager
+          bills={bills.bills}
+          accounts={accounts.accounts}
+          isLoading={bills.isLoading}
+          onPayBill={bills.payBill}
+        />
+      </Modal>
     </div>
   )
 }
