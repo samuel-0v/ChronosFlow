@@ -15,6 +15,7 @@ import type {
   FinanceAccountUpdate,
   FinanceBill,
   FinanceBillInsert,
+  FinanceBillUpdate,
   FinanceCategory,
   FinanceCategoryInsert,
   FinanceCategoryUpdate,
@@ -57,7 +58,10 @@ interface UseFinanceBillsReturn {
   isLoading: boolean
   getOrCreateBill: (accountId: string, month: number, year: number) => Promise<FinanceBill | null>
   updateBillStatus: (id: string, status: FinanceBill['status']) => Promise<boolean>
+  updateBill: (id: string, data: FinanceBillUpdate) => Promise<boolean>
+  deleteBill: (id: string) => Promise<boolean>
   payBill: (billId: string, sourceAccountId: string) => Promise<{ ok: boolean; error?: string }>
+  revertBillPayment: (billId: string) => Promise<{ ok: boolean; error?: string }>
   refetch: () => void
 }
 
@@ -66,8 +70,8 @@ interface UseFinanceTransactionsReturn {
   isLoading: boolean
   isSubmitting: boolean
   createTransaction: (payload: NewTransactionPayload) => Promise<{ ok: boolean; error?: string }>
-  updateTransaction: (id: string, data: FinanceTransactionUpdate) => Promise<boolean>
-  deleteTransaction: (id: string) => Promise<boolean>
+  updateTransaction: (id: string, data: FinanceTransactionUpdate, original: TransactionWithDetails) => Promise<{ ok: boolean; error?: string }>
+  deleteTransaction: (id: string) => Promise<{ ok: boolean; error?: string }>
   refetch: () => void
 }
 
@@ -525,6 +529,140 @@ export function useFinance(): UseFinanceReturn {
     [user, rawAccounts, refetchBills, refetchTransactions, refetchAccounts],
   )
 
+  /** updateBill — Atualiza campos da fatura (total_amount, due_date, status). */
+  const updateBill = useCallback(
+    async (id: string, data: FinanceBillUpdate): Promise<boolean> => {
+      if (!user) return false
+
+      const { error } = await supabase
+        .from('finance_bills')
+        .update(data)
+        .eq('id', id)
+
+      if (error) {
+        console.error('[useFinance] Erro ao atualizar fatura:', error.message)
+        return false
+      }
+      refetchBills()
+      return true
+    },
+    [user, refetchBills],
+  )
+
+  /** deleteBill — Remove uma fatura e desvincula transações. */
+  const deleteBill = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (!user) return false
+
+      // Primeiro desvincula transações (seta bill_id = null)
+      await supabase
+        .from('finance_transactions')
+        .update({ bill_id: null })
+        .eq('bill_id', id)
+
+      const { error } = await supabase
+        .from('finance_bills')
+        .delete()
+        .eq('id', id)
+
+      if (error) {
+        console.error('[useFinance] Erro ao deletar fatura:', error.message)
+        return false
+      }
+
+      refetchBills()
+      refetchTransactions()
+      return true
+    },
+    [user, refetchBills, refetchTransactions],
+  )
+
+  /**
+   * revertBillPayment — Desfaz o pagamento de uma fatura.
+   *
+   * Fluxo:
+   *   1. Busca a transação TRANSFER com descrição "Pagamento de Fatura" vinculada à conta do cartão
+   *   2. Deleta essa transação (o trigger do banco reverte os saldos)
+   *   3. Marca todas as transações da fatura como PENDING novamente
+   *   4. Atualiza o status da fatura para CLOSED
+   */
+  const revertBillPayment = useCallback(
+    async (billId: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!user) return { ok: false, error: 'Usuário não autenticado.' }
+
+      try {
+        // 1) Busca a fatura para saber account_id, month, year
+        const bill = rawBills.find((b) => b.id === billId)
+        if (!bill) return { ok: false, error: 'Fatura não encontrada.' }
+        if (bill.status !== 'PAID') return { ok: false, error: 'A fatura não está paga.' }
+
+        // 2) Encontra a transação TRANSFER de pagamento
+        const descPattern = `Pagamento de Fatura — ${String(bill.month).padStart(2, '0')}/${bill.year}`
+        const paymentTx = rawTransactions.find(
+          (t) =>
+            t.type === 'TRANSFER' &&
+            t.destination_account_id === bill.account_id &&
+            t.description === descPattern,
+        )
+
+        if (!paymentTx) {
+          return { ok: false, error: 'Transação de pagamento não encontrada.' }
+        }
+
+        // 3) Valida saldo — o estorno vai debitar da conta do cartão
+        const creditAccount = rawAccounts.find((a) => a.id === bill.account_id)
+        if (creditAccount && creditAccount.balance < paymentTx.amount) {
+          return {
+            ok: false,
+            error: `Não é possível desfazer: o estorno deixaria o saldo de "${creditAccount.name}" negativo.`,
+          }
+        }
+
+        // 4) Deleta a transação de pagamento (trigger reverte saldos)
+        const { error: deleteErr } = await supabase
+          .from('finance_transactions')
+          .delete()
+          .eq('id', paymentTx.id)
+
+        if (deleteErr) {
+          console.error('[useFinance] revertBill — erro ao deletar tx:', deleteErr.message)
+          return { ok: false, error: 'Erro ao remover transação de pagamento.' }
+        }
+
+        // 5) Marca todas as transações da fatura como PENDING
+        const { error: txErr } = await supabase
+          .from('finance_transactions')
+          .update({ status: 'PENDING' as const })
+          .eq('bill_id', billId)
+
+        if (txErr) {
+          console.error('[useFinance] revertBill — erro ao reverter status tx:', txErr.message)
+          return { ok: false, error: 'Erro ao reverter status das transações.' }
+        }
+
+        // 6) Atualiza a fatura para CLOSED
+        const { error: billErr } = await supabase
+          .from('finance_bills')
+          .update({ status: 'CLOSED' as const })
+          .eq('id', billId)
+
+        if (billErr) {
+          console.error('[useFinance] revertBill — erro ao atualizar fatura:', billErr.message)
+          return { ok: false, error: 'Erro ao atualizar status da fatura.' }
+        }
+
+        refetchBills()
+        refetchTransactions()
+        refetchAccounts()
+        return { ok: true }
+      } catch (err) {
+        console.error('[useFinance] revertBill — erro inesperado:', err)
+        return { ok: false, error: 'Erro inesperado ao desfazer pagamento.' }
+      }
+    },
+    [user, rawBills, rawTransactions, rawAccounts, refetchBills, refetchTransactions, refetchAccounts],
+  )
+
   // ===================== Mutations: Transações =====================
 
   /**
@@ -711,11 +849,128 @@ export function useFinance(): UseFinanceReturn {
     [user, getOrCreateBill, refetchTransactions, refetchBills, refetchAccounts],
   )
 
-  const updateTransaction = useCallback(
-    async (id: string, data: FinanceTransactionUpdate): Promise<boolean> => {
-      if (!user) return false
+  /**
+   * deleteTransaction — Exclusão com validação de saldo e cascata de parcelas.
+   *
+   * 1. Se INCOME → verifica se estornar não deixa a conta negativa.
+   * 2. Se TRANSFER → verifica se estornar não deixa a conta destino negativa.
+   * 3. Se is_installment → encontra a mãe e exclui (CASCADE cuida das filhas).
+   */
+  const deleteTransaction = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!user) return { ok: false, error: 'Usuário não autenticado.' }
       setTxSubmitting(true)
 
+      // 1) Busca a transação completa (precisamos dos detalhes)
+      const tx = rawTransactions.find((t) => t.id === id)
+      if (!tx) {
+        setTxSubmitting(false)
+        return { ok: false, error: 'Transação não encontrada.' }
+      }
+
+      // 2) Validação de saldo — impedir estorno que deixa conta negativa
+      if (tx.type === 'INCOME') {
+        const account = rawAccounts.find((a) => a.id === tx.account_id)
+        if (account && account.balance < tx.amount) {
+          setTxSubmitting(false)
+          return {
+            ok: false,
+            error: `Não é possível excluir: o estorno deixaria o saldo de "${account.name}" negativo.`,
+          }
+        }
+      }
+
+      if (tx.type === 'TRANSFER' && tx.destination_account_id) {
+        const destAccount = rawAccounts.find((a) => a.id === tx.destination_account_id)
+        if (destAccount && destAccount.balance < tx.amount) {
+          setTxSubmitting(false)
+          return {
+            ok: false,
+            error: `Não é possível excluir: o estorno deixaria o saldo de "${destAccount.name}" negativo.`,
+          }
+        }
+      }
+
+      // 3) Se é parcela, encontra a mãe para deletar em cascata
+      let deleteId = id
+      if (tx.is_installment) {
+        // Se tem parent_transaction_id → é filha, usa o pai
+        // Senão → é a própria mãe
+        deleteId = tx.parent_transaction_id ?? tx.id
+      }
+
+      const { error } = await supabase
+        .from('finance_transactions')
+        .delete()
+        .eq('id', deleteId)
+
+      setTxSubmitting(false)
+
+      if (error) {
+        console.error('[useFinance] Erro ao deletar transação:', error.message)
+        return { ok: false, error: 'Erro ao deletar transação.' }
+      }
+
+      refetchTransactions()
+      refetchBills()
+      refetchAccounts()
+      return { ok: true }
+    },
+    [user, rawTransactions, rawAccounts, refetchTransactions, refetchBills, refetchAccounts],
+  )
+
+  /**
+   * updateTransaction — Edição inteligente.
+   *
+   * Como as triggers SQL de saldo só disparam em INSERT/DELETE (não UPDATE),
+   * se o usuário alterou campos financeiros (amount, type, account_id, payment_method)
+   * a estratégia é: deleteTransaction(antiga) → createTransaction(nova).
+   *
+   * Se alterou apenas campos de texto/data (description, category_id, date)
+   * faz um UPDATE simples no Supabase.
+   */
+  const updateTransaction = useCallback(
+    async (
+      id: string,
+      data: FinanceTransactionUpdate,
+      original: TransactionWithDetails,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!user) return { ok: false, error: 'Usuário não autenticado.' }
+      setTxSubmitting(true)
+
+      // Detecta se houve mudança em campos financeiros
+      const financialChanged =
+        (data.amount !== undefined && data.amount !== original.amount) ||
+        (data.type !== undefined && data.type !== original.type) ||
+        (data.account_id !== undefined && data.account_id !== original.account_id) ||
+        (data.payment_method !== undefined && data.payment_method !== original.payment_method)
+
+      if (financialChanged) {
+        // Estratégia delete + recreate
+        const deleteResult = await deleteTransaction(id)
+        if (!deleteResult.ok) {
+          setTxSubmitting(false)
+          return deleteResult
+        }
+
+        const newPayload: NewTransactionPayload = {
+          account_id: data.account_id ?? original.account_id,
+          destination_account_id: data.destination_account_id ?? original.destination_account_id,
+          category_id: data.category_id ?? original.category_id,
+          type: data.type ?? original.type,
+          payment_method: data.payment_method ?? original.payment_method,
+          description: data.description ?? original.description,
+          amount: data.amount ?? original.amount,
+          date: data.date ?? original.date,
+          total_installments: 1, // Edição não recria parcelas
+        }
+
+        const createResult = await createTransaction(newPayload)
+        setTxSubmitting(false)
+        return createResult
+      }
+
+      // Campos não-financeiros → UPDATE simples
       const { error } = await supabase
         .from('finance_transactions')
         .update(data)
@@ -725,40 +980,14 @@ export function useFinance(): UseFinanceReturn {
 
       if (error) {
         console.error('[useFinance] Erro ao atualizar transação:', error.message)
-        return false
+        return { ok: false, error: 'Erro ao atualizar transação.' }
       }
 
       refetchTransactions()
       refetchAccounts()
-      return true
+      return { ok: true }
     },
-    [user, refetchTransactions, refetchAccounts],
-  )
-
-  const deleteTransaction = useCallback(
-    async (id: string): Promise<boolean> => {
-      if (!user) return false
-      setTxSubmitting(true)
-
-      // Deletar a transação (cascade cuida das filhas se for parent)
-      const { error } = await supabase
-        .from('finance_transactions')
-        .delete()
-        .eq('id', id)
-
-      setTxSubmitting(false)
-
-      if (error) {
-        console.error('[useFinance] Erro ao deletar transação:', error.message)
-        return false
-      }
-
-      refetchTransactions()
-      refetchBills()
-      refetchAccounts()
-      return true
-    },
-    [user, refetchTransactions, refetchBills, refetchAccounts],
+    [user, refetchTransactions, refetchAccounts, deleteTransaction, createTransaction],
   )
 
   // ===================== Retorno =====================
@@ -787,7 +1016,10 @@ export function useFinance(): UseFinanceReturn {
       isLoading: billsLoading,
       getOrCreateBill,
       updateBillStatus,
+      updateBill,
+      deleteBill,
       payBill,
+      revertBillPayment,
       refetch: refetchBills,
     },
     transactions: {

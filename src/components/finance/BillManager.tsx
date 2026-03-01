@@ -6,12 +6,16 @@ import {
   Lock,
   Inbox,
   AlertTriangle,
+  Pencil,
+  Trash2,
+  Undo2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
+import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { formatCurrency } from '@/lib/formatCurrency'
-import type { BillWithAccount, FinanceAccount, BillStatus } from '@/types/finance'
+import type { BillWithAccount, FinanceAccount, FinanceBillUpdate, BillStatus } from '@/types/finance'
 
 // ===================== Props =====================
 
@@ -20,6 +24,9 @@ interface BillManagerProps {
   accounts: FinanceAccount[]
   isLoading: boolean
   onPayBill: (billId: string, sourceAccountId: string) => Promise<{ ok: boolean; error?: string }>
+  onUpdateBill?: (id: string, data: FinanceBillUpdate) => Promise<boolean>
+  onDeleteBill?: (id: string) => Promise<boolean>
+  onRevertPayment?: (billId: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 // ===================== Helpers =====================
@@ -73,20 +80,44 @@ function BillRow({
   bill,
   payableAccounts,
   onPay,
+  onUpdate,
+  onDelete,
+  onRevert,
 }: {
   bill: BillWithAccount
   payableAccounts: FinanceAccount[]
   onPay: (billId: string, sourceAccountId: string) => Promise<{ ok: boolean; error?: string }>
+  onUpdate?: (id: string, data: FinanceBillUpdate) => Promise<boolean>
+  onDelete?: (id: string) => Promise<boolean>
+  onRevert?: (billId: string) => Promise<{ ok: boolean; error?: string }>
 }) {
   const [showPayForm, setShowPayForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [sourceAccountId, setSourceAccountId] = useState('')
   const [isPaying, setIsPaying] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isReverting, setIsReverting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Edit form state
+  const [editDueDate, setEditDueDate] = useState(bill.due_date ?? '')
 
   const status = statusConfig(bill.status)
   const canPay = bill.status === 'OPEN' || bill.status === 'CLOSED'
+  const canEdit = bill.status !== 'PAID'
+  const canDelete = bill.status === 'OPEN'
+  const canRevert = bill.status === 'PAID'
   const cardName = bill.finance_accounts?.name ?? 'Cartão'
   const monthYear = `${MONTH_NAMES[bill.month]} ${bill.year}`
+
+  const closeAll = () => {
+    setShowPayForm(false)
+    setShowEditForm(false)
+    setShowDeleteConfirm(false)
+    setError(null)
+  }
 
   const handlePay = async () => {
     if (!sourceAccountId) {
@@ -104,8 +135,53 @@ function BillRow({
       return
     }
 
-    setShowPayForm(false)
+    closeAll()
     setSourceAccountId('')
+  }
+
+  const handleUpdate = async () => {
+    if (!onUpdate) return
+    setError(null)
+    setIsUpdating(true)
+
+    const ok = await onUpdate(bill.id, { due_date: editDueDate })
+    setIsUpdating(false)
+
+    if (!ok) {
+      setError('Erro ao atualizar fatura.')
+      return
+    }
+    closeAll()
+  }
+
+  const handleDelete = async () => {
+    if (!onDelete) return
+    setError(null)
+    setIsDeleting(true)
+
+    const ok = await onDelete(bill.id)
+    setIsDeleting(false)
+
+    if (!ok) {
+      setError('Erro ao excluir fatura.')
+      return
+    }
+    closeAll()
+  }
+
+  const handleRevert = async () => {
+    if (!onRevert) return
+    setError(null)
+    setIsReverting(true)
+
+    const result = await onRevert(bill.id)
+    setIsReverting(false)
+
+    if (!result.ok) {
+      setError(result.error ?? 'Erro ao desfazer pagamento.')
+      return
+    }
+    closeAll()
   }
 
   return (
@@ -142,12 +218,55 @@ function BillRow({
             variant="outline"
             size="sm"
             onClick={() => {
-              setShowPayForm((p) => !p)
-              setError(null)
+              closeAll()
+              setShowPayForm(true)
             }}
           >
             Pagar
           </Button>
+        )}
+
+        {/* Botão desfazer pagamento */}
+        {canRevert && onRevert && (
+          <Button
+            variant="ghost"
+            size="sm"
+            isLoading={isReverting}
+            onClick={handleRevert}
+            className="text-amber-400 hover:text-amber-300"
+          >
+            <Undo2 className="mr-1 h-3.5 w-3.5" />
+            Desfazer
+          </Button>
+        )}
+
+        {/* Botão editar */}
+        {canEdit && onUpdate && (
+          <button
+            type="button"
+            onClick={() => {
+              closeAll()
+              setEditDueDate(bill.due_date ?? '')
+              setShowEditForm(true)
+            }}
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+
+        {/* Botão excluir */}
+        {canDelete && onDelete && (
+          <button
+            type="button"
+            onClick={() => {
+              closeAll()
+              setShowDeleteConfirm(true)
+            }}
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
 
@@ -193,10 +312,7 @@ function BillRow({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setShowPayForm(false)
-                    setError(null)
-                  }}
+                  onClick={closeAll}
                 >
                   Cancelar
                 </Button>
@@ -213,13 +329,82 @@ function BillRow({
           )}
         </div>
       )}
+
+      {/* Formulário de edição inline */}
+      {showEditForm && (
+        <div className="mx-4 mb-4 space-y-3 rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
+          <p className="text-xs font-medium text-slate-300">
+            Editar vencimento da fatura
+          </p>
+
+          <div className="space-y-1.5">
+            <Label htmlFor={`edit-due-${bill.id}`}>Data de vencimento</Label>
+            <Input
+              id={`edit-due-${bill.id}`}
+              type="date"
+              value={editDueDate}
+              onChange={(e) => setEditDueDate(e.target.value)}
+            />
+          </div>
+
+          {error && (
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+              {error}
+            </p>
+          )}
+
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={closeAll}>
+              Cancelar
+            </Button>
+            <Button size="sm" isLoading={isUpdating} onClick={handleUpdate}>
+              Salvar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmação de exclusão */}
+      {showDeleteConfirm && (
+        <div className="mx-4 mb-4 space-y-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+          <p className="text-xs font-medium text-slate-300">
+            Tem certeza que deseja excluir esta fatura?
+          </p>
+          <p className="text-[11px] text-slate-500">
+            As transações vinculadas não serão excluídas, apenas desvinculadas.
+          </p>
+
+          {error && (
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+              {error}
+            </p>
+          )}
+
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={closeAll}>
+              Cancelar
+            </Button>
+            <Button variant="danger" size="sm" isLoading={isDeleting} onClick={handleDelete}>
+              Excluir Fatura
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ===================== Componente principal =====================
 
-export function BillManager({ bills, accounts, isLoading, onPayBill }: BillManagerProps) {
+export function BillManager({
+  bills,
+  accounts,
+  isLoading,
+  onPayBill,
+  onUpdateBill,
+  onDeleteBill,
+  onRevertPayment,
+}: BillManagerProps) {
   // Apenas contas CHECKING ou CASH podem ser usadas para pagar faturas
   const payableAccounts = useMemo(
     () => accounts.filter((a) => a.type === 'CHECKING' || a.type === 'CASH'),
@@ -268,6 +453,9 @@ export function BillManager({ bills, accounts, isLoading, onPayBill }: BillManag
           bill={bill}
           payableAccounts={payableAccounts}
           onPay={onPayBill}
+          onUpdate={onUpdateBill}
+          onDelete={onDeleteBill}
+          onRevert={onRevertPayment}
         />
       ))}
 

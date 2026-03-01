@@ -21,10 +21,12 @@ import {
   Check,
   X,
   Tag,
+  BarChart3,
+  LineChart,
 } from 'lucide-react'
 import { useFinance } from '@/hooks/useFinance'
 import { Modal, Button } from '@/components/ui'
-import { TransactionForm, AccountForm, SafeDeleteModal, BillManager, CategoryManager } from '@/components/finance'
+import { TransactionForm, AccountForm, SafeDeleteModal, BillManager, CategoryManager, FinanceAnalytics, FinanceForecast } from '@/components/finance'
 import { formatCurrency } from '@/lib/formatCurrency'
 import type { TransactionWithDetails, NewTransactionPayload, FinanceAccount } from '@/types/finance'
 
@@ -244,7 +246,15 @@ function AccountCard({
 
 // ===================== Transaction Row =====================
 
-function TransactionRow({ tx, onDelete }: { tx: TransactionWithDetails; onDelete: (tx: TransactionWithDetails) => void }) {
+function TransactionRow({
+  tx,
+  onEdit,
+  onDelete,
+}: {
+  tx: TransactionWithDetails
+  onEdit: (tx: TransactionWithDetails) => void
+  onDelete: (tx: TransactionWithDetails) => void
+}) {
   const isIncome = tx.type === 'INCOME'
   const isTransfer = tx.type === 'TRANSFER'
 
@@ -316,14 +326,23 @@ function TransactionRow({ tx, onDelete }: { tx: TransactionWithDetails; onDelete
         {isIncome ? '+' : isTransfer ? '' : '−'} {formatCurrency(tx.amount)}
       </span>
 
-      {/* Delete */}
-      <button
-        onClick={() => onDelete(tx)}
-        title="Excluir transação"
-        className="shrink-0 rounded-lg p-1.5 text-slate-600 opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      {/* Edit + Delete */}
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-all group-hover:opacity-100">
+        <button
+          onClick={() => onEdit(tx)}
+          title="Editar transação"
+          className="rounded-lg p-1.5 text-slate-600 hover:bg-primary-500/10 hover:text-primary-400"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => onDelete(tx)}
+          title="Excluir transação"
+          className="rounded-lg p-1.5 text-slate-600 hover:bg-red-500/10 hover:text-red-400"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   )
 }
@@ -339,6 +358,16 @@ const TX_FILTER_OPTIONS: { key: TxFilterKey; label: string }[] = [
   { key: 'TRANSFER', label: 'Transferências' },
 ]
 
+// ===================== Tabs =====================
+
+type FinanceTab = 'transactions' | 'analytics' | 'forecast'
+
+const TABS: { key: FinanceTab; label: string; icon: React.ReactNode }[] = [
+  { key: 'transactions', label: 'Lançamentos', icon: <Receipt className="h-3.5 w-3.5" /> },
+  { key: 'analytics', label: 'Analytics', icon: <BarChart3 className="h-3.5 w-3.5" /> },
+  { key: 'forecast', label: 'Previsão', icon: <LineChart className="h-3.5 w-3.5" /> },
+]
+
 // ===================== Page =====================
 
 export function Finance() {
@@ -349,6 +378,8 @@ export function Finance() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
   const [isBillManagerOpen, setIsBillManagerOpen] = useState(false)
   const [txFilter, setTxFilter] = useState<TxFilterKey>('ALL')
+  const [activeTab, setActiveTab] = useState<FinanceTab>('transactions')
+  const [editingTx, setEditingTx] = useState<TransactionWithDetails | null>(null)
 
   // SafeDelete state
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -373,7 +404,7 @@ export function Finance() {
       id: tx.id,
       name: tx.description,
       warning: tx.is_installment
-        ? 'Esta é uma transação parcelada. Parcelas filhas também serão excluídas.'
+        ? 'Atenção: Esta é uma compra parcelada. Todas as parcelas vinculadas serão excluídas.'
         : undefined,
     })
   }
@@ -381,7 +412,13 @@ export function Finance() {
   const confirmDelete = async (): Promise<boolean> => {
     if (!deleteTarget) return false
     if (deleteTarget.type === 'account') return accounts.deleteAccount(deleteTarget.id)
-    return transactions.deleteTransaction(deleteTarget.id)
+    const result = await transactions.deleteTransaction(deleteTarget.id)
+    if (!result.ok) {
+      // Mantém o modal aberto e atualiza o warning com o erro
+      setDeleteTarget((prev) => prev ? { ...prev, warning: result.error } : null)
+      return false
+    }
+    return true
   }
 
   // --- Dados derivados ---
@@ -498,43 +535,65 @@ export function Finance() {
         </div>
       )}
 
-      {/* ========== Contas ========== */}
-      <section className="mb-8">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
-          <Landmark className="h-4 w-4 text-slate-500" />
-          Minhas Contas
-        </h2>
+      {/* ========== Tab Bar ========== */}
+      <div className="mb-6 flex gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'bg-primary-600/15 text-primary-400 shadow-sm'
+                : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-        {accounts.isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
-        ) : accounts.accounts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 py-12">
-            <Landmark className="mb-2 h-7 w-7 text-slate-700" />
-            <p className="text-sm font-medium text-slate-500">Nenhuma conta cadastrada.</p>
-            <p className="mt-0.5 text-xs text-slate-600">
-              Cadastre suas contas e cartões para começar.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {accounts.accounts.map((acc) => (
-              <AccountCard
-                key={acc.id}
-                account={acc}
-                currentBillTotal={currentBillByAccount[acc.id] ?? null}
-                onUpdateBalance={accounts.updateAccountBalance}
-                onDelete={handleDeleteAccount}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      {/* ========== Tab Content ========== */}
 
-      {/* ========== Transações ========== */}
-      <section>
+      {activeTab === 'transactions' && (
+        <>
+          {/* ========== Contas ========== */}
+          <section className="mb-8">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
+              <Landmark className="h-4 w-4 text-slate-500" />
+              Minhas Contas
+            </h2>
+
+            {accounts.isLoading ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
+            ) : accounts.accounts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 py-12">
+                <Landmark className="mb-2 h-7 w-7 text-slate-700" />
+                <p className="text-sm font-medium text-slate-500">Nenhuma conta cadastrada.</p>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  Cadastre suas contas e cartões para começar.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {accounts.accounts.map((acc) => (
+                  <AccountCard
+                    key={acc.id}
+                    account={acc}
+                    currentBillTotal={currentBillByAccount[acc.id] ?? null}
+                    onUpdateBalance={accounts.updateAccountBalance}
+                    onDelete={handleDeleteAccount}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* ========== Transações ========== */}
+          <section>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300">
             <Receipt className="h-4 w-4 text-slate-500" />
@@ -593,7 +652,7 @@ export function Finance() {
         ) : (
           <div className="divide-y divide-slate-800/50 rounded-2xl border border-slate-800 bg-slate-900">
             {filteredTx.map((tx) => (
-              <TransactionRow key={tx.id} tx={tx} onDelete={handleDeleteTransaction} />
+              <TransactionRow key={tx.id} tx={tx} onEdit={setEditingTx} onDelete={handleDeleteTransaction} />
             ))}
           </div>
         )}
@@ -608,6 +667,23 @@ export function Finance() {
           </p>
         )}
       </section>
+        </>
+      )}
+
+      {activeTab === 'analytics' && (
+        <FinanceAnalytics
+          transactions={transactions.transactions}
+          categories={categories.categories}
+        />
+      )}
+
+      {activeTab === 'forecast' && (
+        <FinanceForecast
+          accounts={accounts.accounts}
+          bills={bills.bills}
+          transactions={transactions.transactions}
+        />
+      )}
 
       {/* ========== Modal Nova Movimentação ========== */}
       <Modal
@@ -626,6 +702,42 @@ export function Finance() {
           }}
           onCancel={() => setIsCreateOpen(false)}
         />
+      </Modal>
+
+      {/* ========== Modal Editar Movimentação ========== */}
+      <Modal
+        isOpen={editingTx !== null}
+        onClose={() => setEditingTx(null)}
+        title="Editar Movimentação"
+      >
+        {editingTx && (
+          <TransactionForm
+            key={editingTx.id}
+            accounts={accounts.accounts}
+            categories={categories.categories}
+            isSubmitting={transactions.isSubmitting}
+            initialData={editingTx}
+            onSubmit={async (payload: NewTransactionPayload) => {
+              const result = await transactions.updateTransaction(
+                editingTx.id,
+                {
+                  account_id: payload.account_id,
+                  destination_account_id: payload.destination_account_id,
+                  category_id: payload.category_id,
+                  type: payload.type,
+                  payment_method: payload.payment_method,
+                  description: payload.description,
+                  amount: payload.amount,
+                  date: payload.date,
+                },
+                editingTx,
+              )
+              if (result.ok) setEditingTx(null)
+              return result
+            }}
+            onCancel={() => setEditingTx(null)}
+          />
+        )}
       </Modal>
 
       {/* ========== Modal Nova Conta ========== */}
@@ -684,6 +796,9 @@ export function Finance() {
           accounts={accounts.accounts}
           isLoading={bills.isLoading}
           onPayBill={bills.payBill}
+          onUpdateBill={bills.updateBill}
+          onDeleteBill={bills.deleteBill}
+          onRevertPayment={bills.revertBillPayment}
         />
       </Modal>
     </div>

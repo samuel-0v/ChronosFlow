@@ -12,6 +12,7 @@ import type {
   FinanceAccount,
   FinanceCategory,
   AccountType,
+  TransactionWithDetails,
 } from '@/types/finance'
 
 // ===================== Props =====================
@@ -20,6 +21,8 @@ interface TransactionFormProps {
   accounts: FinanceAccount[]
   categories: FinanceCategory[]
   isSubmitting: boolean
+  /** Dados da transação existente — ativa modo edição */
+  initialData?: TransactionWithDetails
   onSubmit: (payload: NewTransactionPayload) => Promise<{ ok: boolean; error?: string }>
   onCancel?: () => void
 }
@@ -48,18 +51,26 @@ export function TransactionForm({
   accounts,
   categories,
   isSubmitting,
+  initialData,
   onSubmit,
   onCancel,
 }: TransactionFormProps) {
+  const isEditing = !!initialData
+
+  // Limpa sufixo de parcela da descrição (ex: "Compra (2/6)" → "Compra")
+  const cleanDescription = initialData
+    ? initialData.description.replace(/\s*\(\d+\/\d+\)$/, '')
+    : ''
+
   // ----- Estado do formulário -----
-  const [type, setType] = useState<TransactionType>('EXPENSE')
-  const [accountId, setAccountId] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX')
-  const [destinationAccountId, setDestinationAccountId] = useState('')
-  const [categoryId, setCategoryId] = useState('')
-  const [description, setDescription] = useState('')
-  const [amount, setAmount] = useState('')
-  const [date, setDate] = useState(getLocalISODate())
+  const [type, setType] = useState<TransactionType>(initialData?.type ?? 'EXPENSE')
+  const [accountId, setAccountId] = useState(initialData?.account_id ?? '')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(initialData?.payment_method ?? 'PIX')
+  const [destinationAccountId, setDestinationAccountId] = useState(initialData?.destination_account_id ?? '')
+  const [categoryId, setCategoryId] = useState(initialData?.category_id ?? '')
+  const [description, setDescription] = useState(cleanDescription)
+  const [amount, setAmount] = useState(initialData ? String(initialData.amount) : '')
+  const [date, setDate] = useState(initialData?.date ?? getLocalISODate())
   const [totalInstallments, setTotalInstallments] = useState('1')
 
   const [error, setError] = useState<string | null>(null)
@@ -89,10 +100,10 @@ export function TransactionForm({
     return accounts
   }, [accounts, isTransfer, type])
 
-  // Contas para destino de transferência (exclui a conta origem)
+  // Contas para destino de transferência (exclui a conta origem e contas CREDIT)
   const destinationAccounts = useMemo(() => {
     if (!isTransfer) return []
-    return accounts.filter((a) => a.id !== accountId)
+    return accounts.filter((a) => a.id !== accountId && a.type !== 'CREDIT')
   }, [accounts, isTransfer, accountId])
 
   // Categorias filtradas pelo tipo (INCOME / EXPENSE)
@@ -125,12 +136,13 @@ export function TransactionForm({
     return items
   }, [showInstallments, totalInstallments, amount, date])
 
-  // Auto-selecionar primeira conta quando as opções mudam
+  // Auto-selecionar primeira conta quando as opções mudam (só no modo criação)
   useEffect(() => {
+    if (isEditing) return
     if (availableAccounts.length > 0 && !availableAccounts.find((a) => a.id === accountId)) {
       setAccountId(availableAccounts[0].id)
     }
-  }, [availableAccounts, accountId])
+  }, [availableAccounts, accountId, isEditing])
 
   // Sincronizar paymentMethod quando a conta muda
   useEffect(() => {
@@ -203,12 +215,14 @@ export function TransactionForm({
       return
     }
 
-    // Reset
-    setDescription('')
-    setAmount('')
-    setDate(getLocalISODate())
-    setTotalInstallments('1')
-    setCategoryId('')
+    if (!isEditing) {
+      // Reset apenas em modo criação
+      setDescription('')
+      setAmount('')
+      setDate(getLocalISODate())
+      setTotalInstallments('1')
+      setCategoryId('')
+    }
   }
 
   return (
@@ -423,7 +437,7 @@ export function TransactionForm({
           isLoading={isSubmitting}
           disabled={availableAccounts.length === 0}
         >
-          {isTransfer ? 'Transferir' : 'Registrar'}
+          {isEditing ? 'Salvar' : isTransfer ? 'Transferir' : 'Registrar'}
         </Button>
       </div>
     </form>
