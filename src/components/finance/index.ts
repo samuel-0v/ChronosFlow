@@ -2,7 +2,7 @@
 // ChronosFlow - Finance Components Barrel
 // ==========================================
 
-export { TransactionForm } from './TransactionForm'
+// TransactionForm export removed: module './TransactionForm' not found
 export { AccountForm } from './AccountForm'
 export { FinanceCategoryForm } from './FinanceCategoryForm'
 export { SafeDeleteModal } from './SafeDeleteModal'

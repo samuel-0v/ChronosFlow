@@ -95,10 +95,11 @@ export function CategoryManager({
     return ok
   }
 
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return
-    await onDelete(deleteTarget.id)
+  const handleConfirmDelete = async (): Promise<boolean> => {
+    if (!deleteTarget) return false
+    const ok = await onDelete(deleteTarget.id)
     setDeleteTarget(null)
+    return ok
   }
 
   // ---- Separar por tipo ----
