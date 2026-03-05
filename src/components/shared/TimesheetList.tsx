@@ -163,8 +163,11 @@ function SessionRow({
       return
     }
 
+    const totalOldSeconds = original.getTime() - startDate.getTime();
+    const totalNewSeconds = newEnd.getTime() - startDate.getTime();
+
     // Validação: só pode reduzir (não aumentar)
-    if (newEnd.getTime() > original.getTime()) {
+    if (totalNewSeconds > totalOldSeconds) {
       setEditError('Só é permitido reduzir o horário.')
       return
     }
