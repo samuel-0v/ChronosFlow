@@ -163,15 +163,6 @@ function SessionRow({
       return
     }
 
-    const totalOldSeconds = original.getTime() - startDate.getTime();
-    const totalNewSeconds = newEnd.getTime() - startDate.getTime();
-
-    // Validação: só pode reduzir (não aumentar)
-    if (totalNewSeconds > totalOldSeconds) {
-      setEditError('Só é permitido reduzir o horário.')
-      return
-    }
-
     // Recalcular total_duration (em segundos), descontando pausas
     let pauseSeconds = 0
     for (const p of entry.pauses) {
